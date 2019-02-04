@@ -4,13 +4,14 @@ from flask import Flask, render_template
 from twisted.logger import globalLogPublisher
 
 from hendrix.deploy.base import HendrixDeploy
-from hendrix.experience import crosstown_traffic, hey_joe
+from hendrix.experience import hey_joe
 from nucypher.characters.base import Character
 from nucypher.characters.lawful import Ursula
 from nucypher.config.constants import GLOBAL_DOMAIN
 from nucypher.network.middleware import RestMiddleware
 from nucypher.network.nodes import FleetStateTracker
 from nucypher.utilities.logging import SimpleObserver
+from nucypher.status.status_app import MoeStatus
 
 websocket_service = hey_joe.WebSocketService("127.0.0.1", 9000)
 globalLogPublisher.addObserver(SimpleObserver())
@@ -19,7 +20,8 @@ known_node = Ursula.from_seed_and_stake_info(seed_uri=sys.argv[1],
                                              federated_only=True,
                                              minimum_stake=0)
 
-rest_app = Flask("fleet-monitor")
+rest_app = Flask(__name__)
+rest_app.title = 'fleet-monitor'
 
 
 class MonitoringTracker(FleetStateTracker):
@@ -61,7 +63,6 @@ monitor = Moe(
 
 monitor.start_learning_loop()
 
-import time
 import json
 
 
@@ -79,7 +80,7 @@ websocket_service.register_followup("states", send_states)
 websocket_service.register_followup("nodes", send_nodes)
 
 
-@rest_app.route("/")
+@rest_app.route("/status")
 def status():
 
 
@@ -88,6 +89,12 @@ def status():
 
     return render_template('monitor.html')
 
+
+status_app = MoeStatus(moe=monitor,
+                       known_node=known_node,
+                       title='Ursula Status',
+                       flask_server=rest_app,
+                       route_url='/status2/')
 
 deployer = HendrixDeploy(action="start", options={"wsgi": rest_app, "http_port": 9750})
 deployer.add_non_tls_websocket_service(websocket_service)

@@ -11,7 +11,7 @@ python_version = "3"
 umbral = "==0.1.3a0"
 constant-sorrow = ">=0.1.0a8"
 bytestring-splitter = ">=1.0.0a4"
-hendrix = ">=3.1.0"
+hendrix = {git = "https://github.com/jMyles/hendrix.git",ref = "master"}
 # Third-Party
 pyopenssl = "*"
 cryptography = ">=2.3"
@@ -21,7 +21,7 @@ sqlalchemy = "*"
 maya = "*"
 flask = "*"
 # Third-Party Ethereum
-py-evm = "*"
+py-evm = "==0.2.0a39"
 eth-tester = "*"
 py-solc = "*"
 web3 = "*"
@@ -31,6 +31,11 @@ appdirs = "*"
 click = ">=7.0"
 colorama = "*"
 boto3 = "*"
+dash = "==0.34.0"
+dash-html-components = "==0.13.4"
+dash-core-components = "==0.41.0"
+dash-table = "==3.1.11"
+plotly = "==3.5.0"
 
 [dev-packages]
 # Pytest
