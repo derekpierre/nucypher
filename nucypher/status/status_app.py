@@ -5,7 +5,7 @@ from constant_sorrow.constants import NO_KNOWN_NODES
 from dash import Dash
 import dash_html_components as html
 import dash_core_components as dcc
-from dash.dependencies import Output, Input, Event
+from dash.dependencies import Output, Input, State, Event
 import dash_table
 
 from flask import Flask
@@ -14,6 +14,8 @@ from nucypher.characters.lawful import Ursula
 
 
 class NetworkStatus:
+    COLUMNS = ['Icon', 'Identity', 'URL', 'Timestamp', 'Last Seen', 'Fleet State']
+
     def __init__(self,
                  title: str,
                  flask_server: Flask,
@@ -28,6 +30,53 @@ class NetworkStatus:
                              url_base_pathname=route_url,
                              external_stylesheets=external_stylesheets)
         self.dash_app.title = title
+        self.dash_app.config['suppress_callback_exceptions'] = True
+
+    @staticmethod
+    def table(nodes, teacher_index):
+        rows = []
+
+        # style_cell = {
+        #                 'textAlign': 'left',
+        #                 'minWidth': '0px',
+        #                 'maxWidth': '200px',
+        #                 'whiteSpace': 'no-wrap',
+        #                 'overflow': 'hidden',
+        #                 'textOverflow': 'ellipsis',
+        #             }
+
+        for i in range(len(nodes)):
+            row = []
+            node_dict = nodes[i]
+            for col in NetworkStatus.COLUMNS:
+                # update this depending on which
+                # columns you want to show links for
+                # and what you want those links to be
+                value = node_dict[col]
+                if col == 'URL':
+                    # don't show URL
+                    continue
+                elif col == 'Identity':
+                    cell = html.Td(html.A(value,
+                                          href='https://{}/status'.format(node_dict['URL']),
+                                          target='_blank'))
+                else:
+                    cell = html.Td(value)
+                row.append(cell)
+
+            style_dict = {'overflowY': 'scroll'}
+            if i == teacher_index:
+                # highlight teacher
+                style_dict['backgroundColor'] = '#1E65F3'
+                style_dict['color'] = 'white'
+
+            rows.append(html.Tr(row, style=style_dict, className='row'))
+        return html.Table(
+            # header
+            [html.Tr([html.Th(col) for col in NetworkStatus.COLUMNS if col != 'URL'], className='row')] +
+            rows,
+            id='node-table'
+        )
 
 
 class MoeStatus(NetworkStatus):
@@ -62,10 +111,10 @@ class MoeStatus(NetworkStatus):
                          className='row'),
                 html.Div([
                     html.Div([
-                        html.Img(src="/assets/nucypher_logo.png"),
+                        html.Img(src='/assets/nucypher_logo.png'),
                     ], className='banner'),
                     html.Div([
-                        html.H2("Monitoring Application", className='app_name'),
+                        html.H2('Monitoring Application', className='app_name'),
                     ], className='row')
                 ]),
                 html.Hr(),
@@ -88,17 +137,17 @@ class MoeStatus(NetworkStatus):
             fleet_state_dict['Icon'] = '{}'.format(known_node.nickname_metadata[0][1])
             divs = list()
 
-            divs.append(html.H2("Fleet State"))
+            divs.append(html.H2('Fleet State'))
 
             for key in fleet_state_dict:
                 div = html.Div([
                     html.Div([
                         html.Strong([key])
-                    ], className="two columns right-aligned"),
+                    ], className='two columns right-aligned'),
                     html.Div([
                         html.Div(fleet_state_dict[key])
-                    ], className="ten columns")
-                ], className="row")
+                    ], className='ten columns')
+                ], className='row')
 
                 divs.append(div)
 
@@ -110,8 +159,6 @@ class MoeStatus(NetworkStatus):
             events=[Event('status-update', 'interval')]
         )
         def known_nodes(fleet_state):
-            columns = ['Icon', 'Identity', 'Timestamp', 'Last Seen', 'Fleet State']
-
             nodes = list()
 
             nodes_dict = moe.known_nodes.abridged_nodes_dict()
@@ -120,12 +167,13 @@ class MoeStatus(NetworkStatus):
             for checksum in nodes_dict:
                 node_data = nodes_dict[checksum]
                 node_dict = dict()
-                node_dict[columns[0]] = '{} {}'.format(node_data["nickname_metadata"][0][1],
-                                                       node_data["nickname_metadata"][1][1])
-                node_dict[columns[1]] = node_data["nickname"]
-                node_dict[columns[2]] = node_data["timestamp"]
-                node_dict[columns[3]] = node_data["last_seen"]
-                node_dict[columns[4]] = node_data["checksum_address"][0:10]
+                node_dict[NetworkStatus.COLUMNS[0]] = '{} {}'.format(node_data['nickname_metadata'][0][1],
+                                                                     node_data['nickname_metadata'][1][1])
+                node_dict[NetworkStatus.COLUMNS[1]] = node_data['nickname']
+                node_dict[NetworkStatus.COLUMNS[2]] = node_data['rest_url']
+                node_dict[NetworkStatus.COLUMNS[3]] = node_data['timestamp']
+                node_dict[NetworkStatus.COLUMNS[4]] = node_data['last_seen']
+                node_dict[NetworkStatus.COLUMNS[5]] = node_data['checksum_address'][0:10]
 
                 if node_data['checksum_address'] == teacher_node.checksum_public_address:
                     teacher_index = len(nodes)
@@ -140,29 +188,42 @@ class MoeStatus(NetworkStatus):
                              className='two columns'),
                 ], className='row'),
                 html.Br(),
-                dash_table.DataTable(
-                    id='node-table',
-                    columns=[{"name": i, "id": i} for i in columns],
-                    data=nodes,
-                    style_table={
-                        'overflowY': 'scroll'
-                    },
-                    style_cell={
-                        'textAlign': 'left',
-                        'minWidth': '0px',
-                        'maxWidth': '200px',
-                        'whiteSpace': 'no-wrap',
-                        'overflow': 'hidden',
-                        'textOverflow': 'ellipsis',
-                    },
-                    css=[{
-                        'selector': '.dash-cell div.dash-cell-value',
-                        'rule': 'display: inline; white-space: inherit; overflow: inherit; text-overflow: inherit;'
-                    }],
-                    style_data_conditional=[{
-                        "if": {"row_index": teacher_index},
-                        "backgroundColor": "#1E65F3",
-                        'color': 'white'
-                    }]
-                )
+                html.Div([
+                    NetworkStatus.table(nodes, teacher_index)
+                ], className='row')
+
+                # dash_table.DataTable(
+                #     id='node-table',
+                #     columns=[{'name': col, 'id': col} for col in columns],
+                #     data=nodes,
+                #     style_table={
+                #         'overflowY': 'scroll'
+                #     },
+                #     style_cell={
+                #         'textAlign': 'left',
+                #         'minWidth': '0px',
+                #         'maxWidth': '200px',
+                #         'whiteSpace': 'no-wrap',
+                #         'overflow': 'hidden',
+                #         'textOverflow': 'ellipsis',
+                #     },
+                #     css=[{
+                #         'selector': '.dash-cell div.dash-cell-value',
+                #         'rule': 'display: inline; white-space: inherit; overflow: inherit; text-overflow: inherit;'
+                #     }],
+                #     style_data_conditional=[{
+                #         'if': {'row_index': teacher_index},
+                #         'backgroundColor': '#1E65F3',
+                #         'color': 'white'
+                #     }]
+                # )
             ], className='row')
+
+        # @self.dash_app.callback(
+        #     Output('url', 'href'),
+        #     [Input('node-table', 'active_cell')],
+        #     [State('node-table', 'data')]
+        # )
+        # def update_pathname(active_cell, data):
+        #     print(">>>>>>>>>>>>>> Derek:", data[active_cell[0]]['Identity'])
+        #     return 'http://www.google.ca'
