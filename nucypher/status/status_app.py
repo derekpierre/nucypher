@@ -6,7 +6,8 @@ from dash import Dash
 import dash_html_components as html
 import dash_core_components as dcc
 from dash.dependencies import Output, Input, State, Event
-import dash_table
+import dash_dangerously_set_inner_html
+#import dash_table
 
 from flask import Flask
 
@@ -25,7 +26,7 @@ class NetworkStatus:
         external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
         self.log = Logger(self.__class__.__name__)
 
-        self.dash_app = Dash(__name__,
+        self.dash_app = Dash(name=__name__,
                              server=flask_server,
                              url_base_pathname=route_url,
                              external_stylesheets=external_stylesheets)
@@ -35,15 +36,6 @@ class NetworkStatus:
     @staticmethod
     def table(nodes, teacher_index):
         rows = []
-
-        # style_cell = {
-        #                 'textAlign': 'left',
-        #                 'minWidth': '0px',
-        #                 'maxWidth': '200px',
-        #                 'whiteSpace': 'no-wrap',
-        #                 'overflow': 'hidden',
-        #                 'textOverflow': 'ellipsis',
-        #             }
 
         for i in range(len(nodes)):
             row = []
@@ -60,6 +52,10 @@ class NetworkStatus:
                     cell = html.Td(html.A(value,
                                           href='https://{}/status'.format(node_dict['URL']),
                                           target='_blank'))
+                elif col == 'Fleet State':
+                    cell = html.Td(children=html.Div([
+                        dash_dangerously_set_inner_html.DangerouslySetInnerHTML(value)
+                    ]))
                 else:
                     cell = html.Td(value)
                 row.append(cell)
@@ -111,7 +107,7 @@ class MoeStatus(NetworkStatus):
                          className='row'),
                 html.Div([
                     html.Div([
-                        html.Img(src='/assets/nucypher_logo.png'),
+                        html.Img(src='./assets/nucypher_logo.png'),
                     ], className='banner'),
                     html.Div([
                         html.H2('Monitoring Application', className='app_name'),
@@ -173,7 +169,7 @@ class MoeStatus(NetworkStatus):
                 node_dict[NetworkStatus.COLUMNS[2]] = node_data['rest_url']
                 node_dict[NetworkStatus.COLUMNS[3]] = node_data['timestamp']
                 node_dict[NetworkStatus.COLUMNS[4]] = node_data['last_seen']
-                node_dict[NetworkStatus.COLUMNS[5]] = node_data['checksum_address'][0:10]
+                node_dict[NetworkStatus.COLUMNS[5]] = node_data['fleet_state_icon']
 
                 if node_data['checksum_address'] == teacher_node.checksum_public_address:
                     teacher_index = len(nodes)
@@ -218,12 +214,3 @@ class MoeStatus(NetworkStatus):
                 #     }]
                 # )
             ], className='row')
-
-        # @self.dash_app.callback(
-        #     Output('url', 'href'),
-        #     [Input('node-table', 'active_cell')],
-        #     [State('node-table', 'data')]
-        # )
-        # def update_pathname(active_cell, data):
-        #     print(">>>>>>>>>>>>>> Derek:", data[active_cell[0]]['Identity'])
-        #     return 'http://www.google.ca'

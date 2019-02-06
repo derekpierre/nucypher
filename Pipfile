@@ -31,11 +31,12 @@ appdirs = "*"
 click = ">=7.0"
 colorama = "*"
 boto3 = "*"
-dash = "==0.34.0"
-dash-html-components = "==0.13.4"
+dash = "==0.35.3"
+dash-html-components = "==0.13.5"
 dash-core-components = "==0.41.0"
 dash-table = "==3.1.11"
 plotly = "==3.5.0"
+dash-dangerously-set-inner-html = "==0.0.2"
 
 [dev-packages]
 # Pytest
