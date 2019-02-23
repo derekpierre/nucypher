@@ -30,6 +30,13 @@ appdirs = "*"
 click = ">=7.0"
 colorama = "*"
 boto3 = "*"
+dash = "==0.34.0"
+dash-html-components = "==0.13.4"
+dash-core-components = "==0.41.0"
+dash-table = "==3.1.11"
+pandas = "==0.23.4"
+plotly = "==3.5.0"
+nucypher = {editable = true,path = "."}
 
 [dev-packages]
 # Pytest
@@ -55,6 +62,8 @@ recommonmark = "*"
 sphinx_rtd_theme = "*"
 # CLI
 nucypher = {editable = true,path = "."}
+responses = "*"
+pytest-dash = "*"
 
 [scripts]
 install-solc = "scripts/install_solc.sh"

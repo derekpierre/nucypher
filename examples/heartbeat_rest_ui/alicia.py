@@ -3,7 +3,7 @@ from dash.dependencies import Output, Input, State, Event
 import dash_html_components as html
 import os
 
-from app import app, SHARED_FOLDER
+from examples.heartbeat_rest_ui.app import app, SHARED_FOLDER
 
 import datetime
 import maya
