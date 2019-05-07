@@ -70,6 +70,8 @@ from nucypher.network.nicknames import nickname_from_seed
 from nucypher.network.nodes import Teacher
 from nucypher.network.protocols import InterfaceInfo, parse_node_uri
 from nucypher.network.server import ProxyRESTServer, TLSHostingPower, make_rest_app
+from nucypher.blockchain.eth.decorators import validate_checksum_address
+from nucypher.status.status_app import UrsulaStatusApp
 
 
 class Alice(Character, BlockchainPolicyAuthor):
@@ -673,7 +675,7 @@ class Bob(Character):
         cleartexts = []
 
         if must_do_new_retrieval:
-            # TODO: Consider blocking until map is done being followed. #1114 
+            # TODO: Consider blocking until map is done being followed. #1114
 
             work_orders = self.generate_work_orders(map_id, capsule, cache=cache)
             the_airing_of_grievances = []
@@ -877,6 +879,9 @@ class Ursula(Teacher, Character, Worker):
                     db_filepath=db_filepath,
                     serving_domains=domains,
                 )
+
+                self.status_app = UrsulaStatusApp(self, self.nickname, rest_app, '/status2/')
+
 
                 #
                 # TLSHostingPower (Ephemeral Self-Ursula)
