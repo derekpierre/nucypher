@@ -16,12 +16,11 @@ along with nucypher.  If not, see <https://www.gnu.org/licenses/>.
 """
 
 import binascii
-import os
-from typing import Tuple
+from typing import Callable, Tuple
 
 from flask import Flask, Response
 from flask import request
-from jinja2 import Template, TemplateError
+from hendrix.experience import crosstown_traffic
 from twisted.logger import Logger
 from umbral import pre
 from umbral.keys import UmbralPublicKey
@@ -35,22 +34,15 @@ from hendrix.experience import crosstown_traffic
 import nucypher
 from nucypher.config.storages import ForgetfulNodeStorage
 from nucypher.crypto.kits import UmbralMessageKit
-from nucypher.crypto.powers import KeyPairBasedPower, PowerUpError
-from nucypher.crypto.signing import InvalidSignature
+from nucypher.crypto.powers import SigningPower, KeyPairBasedPower, PowerUpError
+from nucypher.crypto.signing import InvalidSignature, SignatureStamp
 from nucypher.crypto.utils import canonical_address_from_umbral_key
 from nucypher.keystore.keypairs import HostingKeypair
 from nucypher.keystore.keystore import NotFound
 from nucypher.keystore.threading import ThreadedSession
 from nucypher.network import LEARNING_LOOP_VERSION
-from nucypher.network.exceptions import NodeSeemsToBeDown
+from nucypher.network.middleware import RestMiddleware
 from nucypher.network.protocols import InterfaceInfo
-
-HERE = BASE_DIR = os.path.abspath(os.path.dirname(__file__))
-TEMPLATES_DIR = os.path.join(HERE, "templates")
-
-with open(os.path.join(TEMPLATES_DIR, "basic_status.j2"), "r") as f:
-    _status_template_content = f.read()
-status_template = Template(_status_template_content)
 
 
 class ProxyRESTServer:
@@ -380,23 +372,6 @@ def make_rest_app(
             # TODO: Make this a proper 500 or whatever.
             log.info("Bad TreasureMap ID; not storing {}".format(treasure_map_id))
             assert False
-
-    @rest_app.route('/status')
-    def status():
-        headers = {"Content-Type": "text/html", "charset": "utf-8"}
-        previous_states = list(reversed(this_node.known_nodes.states.values()))[:5]
-
-        try:
-            content = status_template.render(this_node=this_node,
-                                             known_nodes=this_node.known_nodes,
-                                             previous_states=previous_states,
-                                             domains=serving_domains,
-                                             version=nucypher.__version__)
-        except Exception as e:
-            log.debug("Template Rendering Exception: ".format(str(e)))
-            raise TemplateError(str(e)) from e
-
-        return Response(response=content, headers=headers)
 
     return rest_app, datastore
 
