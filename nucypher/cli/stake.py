@@ -120,9 +120,13 @@ def stake(click_config,
         if registry_filepath:
             registry = EthereumContractRegistry(registry_filepath=registry_filepath)
             fetch_registry = False
-        blockchain = BlockchainInterface(provider_uri=provider_uri, registry=registry, poa=poa)
 
-        blockchain.connect(fetch_registry=False, sync_now=sync, emitter=emitter)
+        try:
+            blockchain = BlockchainInterface(provider_uri=provider_uri, registry=registry, poa=poa)
+            blockchain.connect(fetch_registry=fetch_registry, sync_now=sync, emitter=emitter)
+        except BlockchainInterface.InterfaceError as e:
+            emitter.echo(f'Unable to connect to blockchain - {str(e)}', color='red', bold=True)
+            raise click.Abort()
 
         new_stakeholder = StakeHolder(config_root=config_root,
                                       offline_mode=offline,
@@ -136,11 +140,16 @@ def stake(click_config,
     # Make Stakeholder
     #
 
-    STAKEHOLDER = StakeHolder.from_configuration_file(filepath=config_file,
-                                                      provider_uri=provider_uri,
-                                                      registry_filepath=registry_filepath,
-                                                      offline=offline,
-                                                      sync_now=sync)
+    try:
+        STAKEHOLDER = StakeHolder.from_configuration_file(filepath=config_file,
+                                                          provider_uri=provider_uri,
+                                                          registry_filepath=registry_filepath,
+                                                          offline=offline,
+                                                          sync_now=sync)
+    except Exception as e:
+        emitter.echo(f"Stakeholder configuration could not be obtained - {str(e)}.", color='red', bold=True)
+        raise click.Abort()
+
     #
     # Eager Actions
     #
@@ -357,5 +366,5 @@ def stake(click_config,
 
     else:
         ctx = click.get_current_context()
-        click.UsageError(message=f"Unknown action '{action}'.", ctx=ctx).show()
+        raise click.BadArgumentUsage(message=f"Unknown action '{action}'.", ctx=ctx)
     return  # Exit

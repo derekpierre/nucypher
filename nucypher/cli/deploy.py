@@ -132,8 +132,8 @@ def deploy(action,
     blockchain = BlockchainDeployerInterface(provider_uri=provider_uri, poa=poa, registry=registry)
     try:
         blockchain.connect(fetch_registry=False, sync_now=False)
-    except BlockchainDeployerInterface.ConnectionFailed as e:
-        emitter.echo(str(e), color='red', bold=True)
+    except BlockchainDeployerInterface.InterfaceError as e:
+        emitter.echo(f'Unable to connect to blockchain: {str(e)}', color='red', bold=True)
         raise click.Abort()
 
     #
@@ -277,4 +277,5 @@ def deploy(action,
         return  # Exit
 
     else:
-        raise click.BadArgumentUsage(message=f"Unknown action '{action}'")
+        ctx = click.get_current_context()
+        raise click.BadArgumentUsage(message=f"Unknown action '{action}'", ctx=ctx)

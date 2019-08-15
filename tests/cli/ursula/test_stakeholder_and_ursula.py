@@ -78,6 +78,29 @@ def mock_registry_filepath(testerchain, agency):
         os.remove(MOCK_REGISTRY_FILEPATH)
 
 
+def test_no_stakeholder(click_runner):
+    init_args = ('stake', 'rumpelstiltskin')
+    result = click_runner.invoke(nucypher_cli,
+                                 init_args,
+                                 catch_exceptions=False)
+    assert result.exit_code == 1
+    assert "Stakeholder configuration could not be obtained" in result.output
+    assert "Aborted!" in result.output
+
+
+def test_new_stakeholder_invalid_provider(click_runner):
+    init_args = ('stake', 'new-stakeholder',
+                 '--poa',
+                 '--provider', 'fake://provider')
+    result = click_runner.invoke(nucypher_cli,
+                                 init_args,
+                                 catch_exceptions=False)
+    assert result.exit_code == 1
+    assert "Unable to connect to blockchain" in result.output
+    assert "invalid" in result.output
+    assert "Aborted!" in result.output
+
+
 def test_new_stakeholder(click_runner,
                          custom_filepath,
                          mock_registry_filepath,

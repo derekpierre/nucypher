@@ -35,6 +35,24 @@ PLANNED_UPGRADES = 4
 INSECURE_SECRETS = {v: generate_insecure_secret() for v in range(1, PLANNED_UPGRADES+1)}
 
 
+def test_deploy_no_blockchain_provider(click_runner):
+    result = click_runner.invoke(deploy, 'anansi', catch_exceptions=False)
+    assert result.exit_code == 1
+    assert "No URI or provider" in result.output
+    assert "Aborted!" in result.output
+
+
+def test_deploy_invalid_provider(click_runner):
+    command = ['contracts',
+               '--provider', "fake://news",
+               '--poa']
+    result = click_runner.invoke(deploy, command, catch_exceptions=False)
+    assert result.exit_code == 1
+    assert "Unable to connect to" in result.output
+    assert "invalid" in result.output
+    assert "Aborted!" in result.output
+
+
 def test_nucypher_deploy_contracts(click_runner,
                                    mock_primary_registry_filepath,
                                    mock_allocation_infile,

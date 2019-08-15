@@ -82,6 +82,9 @@ class BlockchainInterface:
     class NoProvider(InterfaceError):
         pass
 
+    class InvalidProvider(InterfaceError):
+        pass
+
     class ConnectionFailed(InterfaceError):
         pass
 
@@ -337,7 +340,7 @@ class BlockchainInterface:
             try:
                 self._provider = providers[provider_scheme](provider_uri)
             except KeyError:
-                raise ValueError(f"{provider_uri} is an invalid or unsupported blockchain provider URI")
+                raise self.InvalidProvider(f"{provider_uri} is an invalid or unsupported blockchain provider URI")
             else:
                 self.provider_uri = provider_uri or NO_BLOCKCHAIN_CONNECTION
         else:
