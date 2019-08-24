@@ -14,6 +14,7 @@ GNU Affero General Public License for more details.
 You should have received a copy of the GNU Affero General Public License
 along with nucypher.  If not, see <https://www.gnu.org/licenses/>.
 """
+
 import json
 import random
 import time
@@ -457,6 +458,12 @@ class Bob(Character):
 
         self.log = Logger(self.__class__.__name__)
         self.log.info(self.banner)
+
+    def get_card(self):
+        from nucypher.characters.utils import BobCard
+        return BobCard(bob_encrypting_key=self.public_keys(DecryptingPower),
+                       bob_verifying_key=self.public_keys(SigningPower))
+
 
     def _pick_treasure_map(self, treasure_map=None, map_id=None):
         if not treasure_map:
