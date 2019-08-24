@@ -18,6 +18,7 @@ along with nucypher.  If not, see <https://www.gnu.org/licenses/>.
 import base64
 
 from bytestring_splitter import BytestringKwargifier
+from qrcode import QRCode
 
 
 class Card:
@@ -37,7 +38,13 @@ class Card:
         return base64.urlsafe_b64encode(bytes(self)).decode()
 
     def to_qr_code(self):
-        pass  # TODO
+        """
+            Print QR code to the terminal.
+        :return:
+        """
+        qr = QRCode()
+        qr.add_data(bytes(self))
+        return qr.print_ascii()
 
     @classmethod
     def from_bytes(cls, data: bytes):
@@ -69,6 +76,17 @@ class Card:
         return dict(self) == dict(other)
 
 
+class AliceCard(Card):
+
+    _specification = dict(alice_verifying_key=(bytes, 33))
+
+    def __init__(self, alice_verifying_key):
+        self.alice_verifying_key = bytes(alice_verifying_key)
+
+    def __bytes__(self):
+        return bytes(self.alice_verifying_key)
+
+
 class BobCard(Card):
 
     _specification = dict(bob_verifying_key=(bytes, 33), bob_encrypting_key=(bytes, 33))
@@ -83,7 +101,7 @@ class BobCard(Card):
 
 class PolicyCard(Card):
 
-    _splitter = dict(alice_verifying_key=(bytes, 33), policy_encrypting_key=(bytes, 33))
+    _specification = dict(alice_verifying_key=(bytes, 33), policy_encrypting_key=(bytes, 33))
 
     def __init__(self, alice_verifying_key, policy_encrypting_key):
         self.alice_verifying_key = bytes(alice_verifying_key)
