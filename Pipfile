@@ -33,7 +33,6 @@ click = ">=7.0"
 colorama = "*"
 boto3 = "*"
 flask-limiter = "*"
-qrcode = "*"
 
 [dev-packages]
 # Pytest

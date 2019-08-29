@@ -42,7 +42,6 @@ from nucypher.config.keyring import NucypherKeyring
 @click.option('--duration-periods', help="Policy duration in periods", type=click.FLOAT)
 @click.option('--expiration', help="Expiration Datetime of a policy", type=click.STRING)  # TODO: click.DateTime()
 @click.option('--message-kit', help="The message kit unicode string encoded in base64", type=click.STRING)
-@click.option('--qr-code/--no-qr-code', help="Print Alice's public keys as a QR code", default=False)
 @nucypher_click_config
 def alice(click_config,
           action,
@@ -84,7 +83,7 @@ def alice(click_config,
           duration_periods,
           expiration,
           message_kit,
-          qr_code,
+
           ):
     """
     "Alice the Policy Authority" management commands.
@@ -263,15 +262,8 @@ def alice(click_config,
     #
 
     elif action == "public-keys":
-        if not qr_code:
-            response = ALICE.controller.public_keys()
-            return response
-        else:
-            # TODO  need to move this to the controller side for json responses (base64 encoding of image)
-            #       json request could specify `qr_code` flag
-            alice_card = ALICE.get_card()
-            alice_card.to_qr_code()
-            return
+        response = ALICE.controller.public_keys()
+        return response
 
     elif action == "derive-policy-pubkey":
 

@@ -18,7 +18,6 @@ along with nucypher.  If not, see <https://www.gnu.org/licenses/>.
 import base64
 
 from bytestring_splitter import BytestringKwargifier
-from qrcode import QRCode
 
 
 class Card:
@@ -38,13 +37,7 @@ class Card:
         return base64.urlsafe_b64encode(bytes(self)).decode()
 
     def to_qr_code(self):
-        """
-            Print QR code to the terminal.
-        :return:
-        """
-        qr = QRCode()
-        qr.add_data(bytes(self))
-        return qr.print_ascii()
+        pass  # TODO
 
     @classmethod
     def from_bytes(cls, data: bytes):

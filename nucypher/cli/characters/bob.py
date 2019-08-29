@@ -34,7 +34,6 @@ from nucypher.crypto.powers import DecryptingPower
 @click.option('--alice-verifying-key', help="Alice's verifying key as a hexadecimal string", type=click.STRING)
 @click.option('--message-kit', help="The message kit unicode string encoded in base64", type=click.STRING)
 @click.option('--sync/--no-sync', default=True)
-@click.option('--qr-code/--no-qr-code', help="Print Bob's public keys as a QR code", default=False)
 @nucypher_click_config
 def bob(click_config,
         action,
@@ -57,8 +56,7 @@ def bob(click_config,
         policy_encrypting_key,
         alice_verifying_key,
         message_kit,
-        sync,
-        qr_code):
+        sync):
     """
     "Bob" management commands.
 
@@ -186,15 +184,8 @@ def bob(click_config,
     #
 
     elif action == "public-keys":
-        if not qr_code:
-            response = BOB.controller.public_keys()
-            return response
-        else:
-            # TODO  need to move this to the controller side for json responses (base64 encoding of image)
-            #       json request could specify `qr_code` flag
-            bob_card = BOB.get_card()
-            bob_card.to_qr_code()
-            return
+        response = BOB.controller.public_keys()
+        return response
 
     elif action == "retrieve":
 
