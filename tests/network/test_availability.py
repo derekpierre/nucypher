@@ -1,6 +1,4 @@
 import pytest_twisted as pt
-import requests
-from flask import Response
 from twisted.internet import threads
 
 from nucypher.network.middleware import NucypherMiddlewareClient, RestMiddleware
@@ -78,21 +76,19 @@ def test_availability_sensor_success(blockchain_ursulas):
 def test_availability_sensor_integration(blockchain_ursulas, monkeypatch):
 
     # Start up self-services
-    ursula = blockchain_ursulas.pop()
+    ursula = blockchain_ursulas[0]
     start_pytest_ursula_services(ursula=ursula)
-
-    ursula._availability_sensor = AvailabilitySensor(ursula=ursula)
 
     def maintain():
         sensor = ursula._availability_sensor
 
         def mock_node_information_endpoint(middleware, port, *args, **kwargs):
-            ursula_were_looking_for = ursula.rest_interface.port == port
-            if ursula_were_looking_for:
-                raise RestMiddleware.NotFound("Fake Reason")  # Make this node unreachable
-            else:
-                response = Response(response=bytes(ursula), mimetype='application/octet-stream')
-                return response
+            for u in blockchain_ursulas:
+                if u.rest_interface.port == port:
+                    if u is ursula:
+                        raise RestMiddleware.NotFound("Fake Reason")  # Make this node unreachable
+                    else:
+                        return bytes(u)
 
         # apply the monkeypatch for requests.get to mock_get
         monkeypatch.setattr(NucypherMiddlewareClient,
@@ -114,3 +110,92 @@ def test_availability_sensor_integration(blockchain_ursulas, monkeypatch):
         if ursula._availability_sensor:
             ursula._availability_sensor.stop()
             ursula._availability_sensor = None
+
+
+@pt.inlineCallbacks
+def test_availability_sensor_integration_multiple_checks(blockchain_ursulas, monkeypatch):
+
+    # Start up self-services
+    for u in blockchain_ursulas:
+        start_pytest_ursula_services(ursula=u)
+
+    def maintain():
+        def mock_node_information_endpoint(middleware, port, *args, **kwargs):
+            for u in blockchain_ursulas:
+                if u.rest_interface.port == port:
+                    return bytes(u)
+
+            raise RestMiddleware.NotFound("Fake Reason")  # Make this node unreachable
+
+        # apply the monkeypatch for requests.get to mock_get
+        monkeypatch.setattr(NucypherMiddlewareClient,
+                            NucypherMiddlewareClient.node_information.__name__,
+                            mock_node_information_endpoint)
+
+        for u in blockchain_ursulas:
+            u._availability_sensor = AvailabilitySensor(ursula=u)
+            u._availability_sensor.start()
+
+        for u in blockchain_ursulas:
+            u._availability_sensor.measure()  # This makes a REST Call
+
+        # to keep this test fast, were just checking for a single entry
+        # (technically there will be 10, but resolution is one second.)
+
+        for u in blockchain_ursulas:
+            assert len(u._availability_sensor.responders) > 0
+            assert u._availability_sensor.score == 10
+
+    # Run the Callbacks
+    try:
+        d = threads.deferToThread(maintain)
+        yield d
+    finally:
+        for u in blockchain_ursulas:
+            if u._availability_sensor:
+                u._availability_sensor.stop()
+                u._availability_sensor = None
+
+
+@pt.inlineCallbacks
+def test_availability_sensor_integration_all_nodes_impersonate_same_node(blockchain_ursulas, monkeypatch):
+
+    ursula = blockchain_ursulas[0]
+
+    # Start up self-services
+    for u in blockchain_ursulas:
+        start_pytest_ursula_services(ursula=u)
+
+    def maintain():
+        def mock_node_information_endpoint(middleware, port, *args, **kwargs):
+            return bytes(ursula)
+
+        # apply the monkeypatch for requests.get to mock_get
+        monkeypatch.setattr(NucypherMiddlewareClient,
+                            NucypherMiddlewareClient.node_information.__name__,
+                            mock_node_information_endpoint)
+
+        for u in blockchain_ursulas:
+            u._availability_sensor = AvailabilitySensor(ursula=u)
+            u._availability_sensor.start()
+
+        for u in blockchain_ursulas:
+            u._availability_sensor.measure()  # This makes a REST Call
+
+        # to keep this test fast, were just checking for a single entry
+        # (technically there will be 10, but resolution is one second.)
+
+        for u in blockchain_ursulas:
+            assert len(u._availability_sensor.responders) > 0
+            assert u._availability_sensor.score < 10
+            assert len(u._availability_sensor._AvailabilitySensor__excuses) > 0
+
+    # Run the Callbacks
+    try:
+        d = threads.deferToThread(maintain)
+        yield d
+    finally:
+        for u in blockchain_ursulas:
+            if u._availability_sensor:
+                u._availability_sensor.stop()
+                u._availability_sensor = None
