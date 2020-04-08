@@ -24,7 +24,7 @@ def test_availability_tracker_success(blockchain_ursulas):
     def measure():
         ursula._availability_tracker.start()
         assert ursula._availability_tracker.score == 10
-        ursula._availability_tracker.record(False)
+        ursula._availability_tracker.record(False, reason='why not?')
         assert ursula._availability_tracker.score == 9.0
         for i in range(7):
             ursula._availability_tracker.record(True)
@@ -36,7 +36,7 @@ def test_availability_tracker_success(blockchain_ursulas):
 
         # The node goes offline for some time...
         for _ in range(10):
-            ursula._availability_tracker.record(False, reason={'error': 'fake failure reason'})
+            ursula._availability_tracker.record(False, reason='fake failure reason')
 
         assert tracker.score < 4
         assert tracker.status() == (tracker.score > (tracker.SENSITIVITY * tracker.MAXIMUM_SCORE))

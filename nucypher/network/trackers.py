@@ -164,7 +164,7 @@ class AvailabilityTracker:
     def dump_excuses(self):
         self.log.info(f'Availability score {self.score} <= threshold ({self.__threshold}); logging current availability issues')
         for time, reason in self.excuses.items():
-            self.log.info(f'Availability Issue: [{time}] - {reason["error"]}')
+            self.log.info(f'Availability Issue: [{time}] - {reason}')
             del self.excuses[time]              # prune excuses once logged
 
     def __start(self, now=True) -> None:
@@ -252,7 +252,7 @@ class AvailabilityTracker:
         ursulas = {known_nodes[addr] for addr in ursula_addresses}
         return ursulas
 
-    def record(self, result: bool = None, reason: dict = None) -> None:
+    def record(self, result: bool = None, reason: str = None) -> None:
         """Update the score with a new result"""
 
         # Score
@@ -271,7 +271,7 @@ class AvailabilityTracker:
             self.log.debug(f"Availability score increased to {self.score}.")
         else:
             if reason:
-                self.log.info(f"Availability score decreased to {self.score}. Reason: {reason.values()}")
+                self.log.info(f"Availability score decreased to {self.score}: {reason}")
                 return
             self.log.info(f"Availability score decreased to {self.score}.")  # ... for no reason at all
 
@@ -302,7 +302,7 @@ class AvailabilityTracker:
             response = self.__ursula.network_middleware.check_rest_availability(initiator=self.__ursula, responder=ursula_or_sprout)
         except RestMiddleware.BadRequest as e:
             self.__responders.add(ursula_or_sprout.checksum_address)
-            self.record(False, reason={'result': f"{ursula_or_sprout.checksum_address} cannot reach this node; Reason: {e.reason}."})
+            self.record(False, reason=f"{ursula_or_sprout.checksum_address} cannot reach this node: {e.reason}.")
         else:
             if response.status_code == 200:
                 self.__responders.add(ursula_or_sprout.checksum_address)
