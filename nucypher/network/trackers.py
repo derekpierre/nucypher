@@ -10,7 +10,7 @@ from twisted.logger import Logger
 from nucypher.config.storages import NodeStorage
 from nucypher.network.exceptions import NodeSeemsToBeDown
 from nucypher.network.middleware import RestMiddleware
-from nucypher.network.nodes import NodeSprout
+from nucypher.network.nodes import NodeSprout, Teacher
 
 
 class AvailabilityTracker:
@@ -294,6 +294,11 @@ class AvailabilityTracker:
             except self.__ursula.network_middleware.NotFound:
                 # This Ursula either opted out ir does not support serving availability trackers.
                 self.log.debug(f"{ursula_or_sprout} responded with 404 to 'ping' endpoint and does not support availability checks")
+                continue
+            except Teacher.InvalidNode as e:
+                # node sampled is invalid
+                cleaned_error = str(e).replace('{', '').replace('}', '')
+                self.log.debug(f"{ursula_or_sprout.checksum_address} is invalid and cannot be used for availability check: {cleaned_error}")
                 continue
 
     def measure(self, ursula_or_sprout: Union['Ursula', NodeSprout]) -> None:

@@ -1,24 +1,30 @@
-import maya
-import pytest
-import time
+import random
 
+import pytest
 import pytest_twisted as pt
 import requests
-from flask import Response
 from twisted.internet import threads
 
-from nucypher.network.middleware import NucypherMiddlewareClient, RestMiddleware
+from nucypher.network.middleware import NucypherMiddlewareClient
 from nucypher.network.trackers import AvailabilityTracker
 from nucypher.utilities.sandbox.ursula import start_pytest_ursula_services
 
 
-@pt.inlineCallbacks
-def test_availability_tracker_success(blockchain_ursulas):
+@pytest.fixture(scope="module")
+def ursula_services_subset(blockchain_ursulas):
+    # we don't need all ten ursulas to have services running
+    _subset_of_ursulas = set(blockchain_ursulas[0:5])
 
     # Start up self-services
-    ursula = blockchain_ursulas.pop()
-    start_pytest_ursula_services(ursula=ursula)
+    for u in _subset_of_ursulas:
+        start_pytest_ursula_services(ursula=u)
 
+    yield _subset_of_ursulas
+
+
+@pt.inlineCallbacks
+def test_availability_tracker_success(ursula_services_subset):
+    ursula = random.choice(tuple(ursula_services_subset))
     ursula._availability_tracker = AvailabilityTracker(ursula=ursula)
 
     def measure():
@@ -79,45 +85,34 @@ def test_availability_tracker_success(blockchain_ursulas):
 
 
 @pt.inlineCallbacks
-def test_availability_tracker_integration(blockchain_ursulas, monkeypatch):
-
+def test_availability_tracker_integration(ursula_services_subset, monkeypatch):
     # Start up self-services
-    ursula = blockchain_ursulas.pop()
-    start_pytest_ursula_services(ursula=ursula)
-
+    ursula = random.choice(tuple(ursula_services_subset))
     ursula._availability_tracker = AvailabilityTracker(ursula=ursula)
 
     def maintain():
         tracker = ursula._availability_tracker
 
         def mock_node_information_endpoint(middleware, port, *args, **kwargs):
-            ursula_were_looking_for = ursula.rest_interface.port == port
-            if ursula_were_looking_for:
-                raise RestMiddleware.NotFound("Fake Reason")  # Make this node unreachable
-            else:
-                response = Response(response=bytes(ursula), mimetype='application/octet-stream')
-                return response
+            if ursula.rest_interface.port == port:
+                raise requests.exceptions.ConnectionError("Fake Reason")  # Make this node unreachable
+            for u in ursula_services_subset:
+                if u.rest_interface.port == port:
+                    return bytes(u)
 
         # apply the monkeypatch for requests.get to mock_get
         monkeypatch.setattr(NucypherMiddlewareClient,
                             NucypherMiddlewareClient.node_information.__name__,
                             mock_node_information_endpoint)
 
-        ursula._availability_tracker.start()
-        tracker.measure_sample()  # This makes a REST Call
+        tracker.start()
+        assert tracker.score == 10, "Initial score is 10"
 
-        start, timeout = maya.now(), 1  # seconds
-        while True:
-            try:
-                assert len(tracker.excuses)
-            except AssertionError:
-                now = maya.now()
-                if (now - start).total_seconds() > timeout:
-                    pytest.fail()
-                time.sleep(0.1)
-                continue
-            else:
-                break
+        # use one ursula: any ursula except itself
+        tracker.measure_sample(random.sample(ursula_services_subset.difference({ursula}), k=1))
+
+        assert len(tracker.excuses)
+        assert len(tracker.responders)
 
     # Run the Callbacks
     try:
@@ -127,3 +122,152 @@ def test_availability_tracker_integration(blockchain_ursulas, monkeypatch):
         if ursula._availability_tracker:
             ursula._availability_tracker.stop()
             ursula._availability_tracker = None
+
+
+@pt.inlineCallbacks
+def test_availability_tracker_score_decreases_then_increases(ursula_services_subset, monkeypatch):
+    # Start up self-services
+    ursula = random.choice(tuple(ursula_services_subset))
+    ursula._availability_tracker = AvailabilityTracker(ursula=ursula)
+
+    def maintain():
+        tracker = ursula._availability_tracker
+
+        make_node_reachable = False
+
+        def mock_node_information_endpoint(middleware, port, *args, **kwargs):
+            if ursula.rest_interface.port == port:
+                if not make_node_reachable:
+                    raise requests.exceptions.ConnectionError("Fake Reason")  # Make this node unreachable
+                else:
+                    return bytes(ursula)
+            for u in ursula_services_subset:
+                if u.rest_interface.port == port:
+                    return bytes(u)
+
+        # apply the monkeypatch for requests.get to mock_get
+        monkeypatch.setattr(NucypherMiddlewareClient,
+                            NucypherMiddlewareClient.node_information.__name__,
+                            mock_node_information_endpoint)
+
+        tracker.start()
+        assert tracker.score == 10, "Initial score is 10"
+
+        # use any ursula but itself
+        tracker.measure_sample(random.sample(ursula_services_subset.difference({ursula}), k=1))
+
+        assert len(tracker.responders) > 0
+        assert len(tracker.excuses) > 0, "node unreachable so there were problems"
+        assert tracker.score < 10, "Score drops because node was unreachable"
+
+        old_score = tracker.score
+
+        # perform check again, but this time make node reachable
+        make_node_reachable = True
+
+        tracker.measure_sample(random.sample(ursula_services_subset.difference({ursula}), k=1))
+
+        # ensure score increased
+        assert tracker.score > old_score, "Score increased since node is now reachable"
+
+    # Run the Callbacks
+    try:
+        d = threads.deferToThread(maintain)
+        yield d
+    finally:
+        if ursula._availability_tracker:
+            ursula._availability_tracker.stop()
+            ursula._availability_tracker = None
+
+
+@pt.inlineCallbacks
+def test_availability_tracker_integration_multiple_nodes(ursula_services_subset, monkeypatch):
+    for u in ursula_services_subset:
+        u._availability_tracker = AvailabilityTracker(ursula=u)
+
+    def maintain():
+        def mock_node_information_endpoint(middleware, port, *args, **kwargs):
+            for u in ursula_services_subset:
+                if u.rest_interface.port == port:
+                    return bytes(u)
+
+        # apply the monkeypatch for requests.get to mock_get
+        monkeypatch.setattr(NucypherMiddlewareClient,
+                            NucypherMiddlewareClient.node_information.__name__,
+                            mock_node_information_endpoint)
+
+        for u in ursula_services_subset:
+            u._availability_tracker.start()
+
+        for u in ursula_services_subset:
+            # run check with all other ursulas except itself
+            u._availability_tracker.measure_sample(ursulas=list(ursula_services_subset.difference({u})))
+
+        for u in ursula_services_subset:
+            assert len(u._availability_tracker.responders) == len(ursula_services_subset) - 1  # everyone but itself
+            assert len(u._availability_tracker.excuses) == 0, "no issues"
+            assert u._availability_tracker.score == 10
+
+    # Run the Callbacks
+    try:
+        d = threads.deferToThread(maintain)
+        yield d
+    finally:
+        for u in ursula_services_subset:
+            if u._availability_tracker:
+                u._availability_tracker.stop()
+                u._availability_tracker = None
+
+
+@pt.inlineCallbacks
+def test_availability_tracker_integration_all_nodes_impersonate_other_nodes_except_one(ursula_services_subset, monkeypatch):
+    valid_ursula = random.choice(tuple(ursula_services_subset))
+
+    for u in ursula_services_subset:
+        u._availability_tracker = AvailabilityTracker(ursula=u)
+
+    def maintain():
+        def mock_node_information_endpoint(middleware, port, *args, **kwargs):
+            # all nodes except for valid_ursula are invalid since their bytes representation is incorrect
+            if valid_ursula.rest_interface.port == port:
+                return bytes(valid_ursula)
+            else:
+                for u in ursula_services_subset:
+                    if u.rest_interface.port != port:
+                        # purposely return the wrong set of bytes
+                        return bytes(u)
+
+        # apply the monkeypatch for requests.get to mock_get
+        monkeypatch.setattr(NucypherMiddlewareClient,
+                            NucypherMiddlewareClient.node_information.__name__,
+                            mock_node_information_endpoint)
+
+        for u in ursula_services_subset:
+            u._availability_tracker.start()
+            assert u._availability_tracker.score == 10, "Initial score is 10"
+
+        for u in ursula_services_subset:
+            # run check with all other ursulas except itself
+            u._availability_tracker.measure_sample(ursulas=list(ursula_services_subset.difference({u})))
+
+        for u in ursula_services_subset:
+            if valid_ursula is u:
+                # only 1 valid ursula so no one else to use for check since all others are invalid nodes
+                # nothing changes since invalid nodes can't be used for availability check
+                assert len(u._availability_tracker.responders) == 0, "no responders since other nodes are invalid"
+                assert len(u._availability_tracker.excuses) == 0, "no excuses"
+                assert u._availability_tracker.score == 10, "score remains unchanged since no responders"
+            else:
+                assert len(u._availability_tracker.responders) == 1,  "only valid_ursula responded"
+                assert len(u._availability_tracker.excuses) == 1,  "excuse from valid_ursula"
+                # score decreased because valid_ursula responded to check, and bytes don't match
+                assert u._availability_tracker.score < 10, "score decreased"
+    # Run the Callbacks
+    try:
+        d = threads.deferToThread(maintain)
+        yield d
+    finally:
+        for u in ursula_services_subset:
+            if u._availability_tracker:
+                u._availability_tracker.stop()
+                u._availability_tracker = None
