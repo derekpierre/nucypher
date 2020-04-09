@@ -543,7 +543,7 @@ def paint_stakes(emitter, stakeholder, paint_inactive: bool = False, staker_addr
             if not stake.is_active and not paint_inactive:
                 # This stake is inactive.
                 continue
-            rows.append(list(stake.dump_excuses().values()))
+            rows.append(list(stake.describe().values()))
         total_stakers += 1
         emitter.echo(tabulate.tabulate(rows, headers=headers, tablefmt="fancy_grid"))  # newline
 

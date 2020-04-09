@@ -1,5 +1,8 @@
 import random
+import time
+from typing import Callable
 
+import maya
 import pytest
 import pytest_twisted as pt
 import requests
@@ -29,9 +32,9 @@ def test_availability_tracker_success(ursula_services_subset):
 
     def measure():
         ursula._availability_tracker.start()
-        assert ursula._availability_tracker.score == 10
+        assert ursula._availability_tracker.score == AvailabilityTracker.MAXIMUM_SCORE
         ursula._availability_tracker.record(False, reason='why not?')
-        assert ursula._availability_tracker.score == 9.0
+        assert ursula._availability_tracker.score == AvailabilityTracker.CHARGE_RATE * AvailabilityTracker.MAXIMUM_SCORE
         for i in range(7):
             ursula._availability_tracker.record(True)
         assert ursula._availability_tracker.score > 9.5
@@ -89,6 +92,10 @@ def test_availability_tracker_integration(ursula_services_subset, monkeypatch):
     # Start up self-services
     ursula = random.choice(tuple(ursula_services_subset))
     ursula._availability_tracker = AvailabilityTracker(ursula=ursula)
+    assert not ursula._availability_tracker.running, "Tracker not yet started"
+    assert ursula._availability_tracker.score == AvailabilityTracker.MAXIMUM_SCORE, "Initial score is maximum"
+    assert len(ursula._availability_tracker.responders) == 0, "No responders since not started"
+    assert len(ursula._availability_tracker.excuses) == 0, "No excuses since not started"
 
     def maintain():
         tracker = ursula._availability_tracker
@@ -106,13 +113,17 @@ def test_availability_tracker_integration(ursula_services_subset, monkeypatch):
                             mock_node_information_endpoint)
 
         tracker.start()
-        assert tracker.score == 10, "Initial score is 10"
+
+        def is_running():
+            return tracker.running
+        _wait_for_assertion(assertion_check=is_running)
 
         # use one ursula: any ursula except itself
         tracker.measure_sample(random.sample(ursula_services_subset.difference({ursula}), k=1))
 
-        assert len(tracker.excuses)
+        assert len(tracker.excuses), "Issue encountered due to node being unreachable"
         assert len(tracker.responders)
+        assert tracker.score < AvailabilityTracker.MAXIMUM_SCORE, "Score is decreased due to node being unreachable"
 
     # Run the Callbacks
     try:
@@ -151,14 +162,13 @@ def test_availability_tracker_score_decreases_then_increases(ursula_services_sub
                             mock_node_information_endpoint)
 
         tracker.start()
-        assert tracker.score == 10, "Initial score is 10"
 
         # use any ursula but itself
         tracker.measure_sample(random.sample(ursula_services_subset.difference({ursula}), k=1))
 
         assert len(tracker.responders) > 0
         assert len(tracker.excuses) > 0, "node unreachable so there were problems"
-        assert tracker.score < 10, "Score drops because node was unreachable"
+        assert tracker.score < AvailabilityTracker.MAXIMUM_SCORE, "Score drops because node was unreachable"
 
         old_score = tracker.score
 
@@ -197,7 +207,7 @@ def test_availability_tracker_integration_multiple_nodes(ursula_services_subset,
                             mock_node_information_endpoint)
 
         for u in ursula_services_subset:
-            u._availability_tracker.start()
+            u._availability_tracker.start(now=False)  # don't start immediately to allow for test
 
         for u in ursula_services_subset:
             # run check with all other ursulas except itself
@@ -206,7 +216,7 @@ def test_availability_tracker_integration_multiple_nodes(ursula_services_subset,
         for u in ursula_services_subset:
             assert len(u._availability_tracker.responders) == len(ursula_services_subset) - 1  # everyone but itself
             assert len(u._availability_tracker.excuses) == 0, "no issues"
-            assert u._availability_tracker.score == 10
+            assert u._availability_tracker.score == AvailabilityTracker.MAXIMUM_SCORE
 
     # Run the Callbacks
     try:
@@ -227,15 +237,9 @@ def test_availability_tracker_integration_all_nodes_impersonate_other_nodes_exce
         u._availability_tracker = AvailabilityTracker(ursula=u)
 
     def maintain():
-        def mock_node_information_endpoint(middleware, port, *args, **kwargs):
+        def mock_node_information_endpoint(middleware, *args, **kwargs):
             # all nodes except for valid_ursula are invalid since their bytes representation is incorrect
-            if valid_ursula.rest_interface.port == port:
-                return bytes(valid_ursula)
-            else:
-                for u in ursula_services_subset:
-                    if u.rest_interface.port != port:
-                        # purposely return the wrong set of bytes
-                        return bytes(u)
+            return bytes(valid_ursula)
 
         # apply the monkeypatch for requests.get to mock_get
         monkeypatch.setattr(NucypherMiddlewareClient,
@@ -243,8 +247,7 @@ def test_availability_tracker_integration_all_nodes_impersonate_other_nodes_exce
                             mock_node_information_endpoint)
 
         for u in ursula_services_subset:
-            u._availability_tracker.start()
-            assert u._availability_tracker.score == 10, "Initial score is 10"
+            u._availability_tracker.start(now=False)  # don't start immediately to allow for test
 
         for u in ursula_services_subset:
             # run check with all other ursulas except itself
@@ -256,12 +259,12 @@ def test_availability_tracker_integration_all_nodes_impersonate_other_nodes_exce
                 # nothing changes since invalid nodes can't be used for availability check
                 assert len(u._availability_tracker.responders) == 0, "no responders since other nodes are invalid"
                 assert len(u._availability_tracker.excuses) == 0, "no excuses"
-                assert u._availability_tracker.score == 10, "score remains unchanged since no responders"
+                assert u._availability_tracker.score == AvailabilityTracker.MAXIMUM_SCORE, "score remained unchanged since no responders"
             else:
                 assert len(u._availability_tracker.responders) == 1,  "only valid_ursula responded"
                 assert len(u._availability_tracker.excuses) == 1,  "excuse from valid_ursula"
                 # score decreased because valid_ursula responded to check, and bytes don't match
-                assert u._availability_tracker.score < 10, "score decreased"
+                assert u._availability_tracker.score < AvailabilityTracker.MAXIMUM_SCORE, "score decreased"
     # Run the Callbacks
     try:
         d = threads.deferToThread(maintain)
@@ -271,3 +274,18 @@ def test_availability_tracker_integration_all_nodes_impersonate_other_nodes_exce
             if u._availability_tracker:
                 u._availability_tracker.stop()
                 u._availability_tracker = None
+
+
+def _wait_for_assertion(assertion_check: Callable, timeout: int = 1):
+    start = maya.now()
+    while True:
+        try:
+            assert assertion_check()
+        except AssertionError:
+            now = maya.now()
+            if (now - start).total_seconds() > timeout:
+                pytest.fail()
+            time.sleep(0.1)
+            continue
+        else:
+            break

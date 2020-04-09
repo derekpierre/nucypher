@@ -3,14 +3,13 @@ from typing import Union
 
 import maya
 from twisted.internet import reactor
-from twisted.internet.defer import Deferred
 from twisted.internet.task import LoopingCall
 from twisted.logger import Logger
 
 from nucypher.config.storages import NodeStorage
 from nucypher.network.exceptions import NodeSeemsToBeDown
 from nucypher.network.middleware import RestMiddleware
-from nucypher.network.nodes import NodeSprout, Teacher
+from nucypher.network.nodes import NodeSprout
 
 
 class AvailabilityTracker:
@@ -25,6 +24,11 @@ class AvailabilityTracker:
     MINIMUM_SCORE = 1.0
     MAXIMUM_SCORE = 10.0
     INITIAL_SCORE = MAXIMUM_SCORE
+
+    # Warning thresholds relative to MAXIMUM_SCORE
+    MILD_WARNING_FACTOR = 0.8
+    MEDIUM_WARNING_FACTOR = 0.5
+    SEVERE_WARNING_FACTOR = 0.25
 
     # Sampling
     SAMPLE_SIZE = 1       # Ursulas
@@ -60,9 +64,9 @@ class AvailabilityTracker:
 
         # Bind alerts ot the instance for access to score
         self.alerts = {
-            int(self.MAXIMUM_SCORE*0.8): self.mild_warning,    # For example 0.8 == 80% of max
-            int(self.MAXIMUM_SCORE*0.5): self.medium_warning,
-            int(self.MAXIMUM_SCORE*0.25): self.severe_warning,
+            int(self.MAXIMUM_SCORE * self.MILD_WARNING_FACTOR): self.mild_warning,    # For example 0.8 == 80% of max
+            int(self.MAXIMUM_SCORE * self.MEDIUM_WARNING_FACTOR): self.medium_warning,
+            int(self.MAXIMUM_SCORE * self.SEVERE_WARNING_FACTOR): self.severe_warning,
 
             # uncomment to enable auto-shutdown; 0 is unobtainable.
             # int(self.MINIMUM_SCORE): self.shutdown_everything,
@@ -162,9 +166,9 @@ class AvailabilityTracker:
         return result
 
     def dump_excuses(self):
-        self.log.info(f'Availability score {self.score} <= threshold ({self.__threshold}); logging current availability issues')
+        self.log.info(f'Current availability issues:')
         for time, reason in self.excuses.items():
-            self.log.info(f'Availability Issue: [{time}] - {reason}')
+            self.log.info(f'- Availability Issue: [{time}] - {reason}')
             del self.excuses[time]              # prune excuses once logged
 
     def __start(self, now=True) -> None:
@@ -289,13 +293,13 @@ class AvailabilityTracker:
                 # This node is either not an Ursula, not available, or is not staking...
                 # ...do nothing and move on without changing the score.
                 cleaned_error = str(e).replace('{', '').replace('}', '')
-                self.log.debug(f"{ursula_or_sprout} responded to availability check with {cleaned_error}")
+                self.log.debug(f"{ursula_or_sprout.checksum_address} responded to availability check with {cleaned_error}")
                 continue
             except self.__ursula.network_middleware.NotFound:
                 # This Ursula either opted out ir does not support serving availability trackers.
-                self.log.debug(f"{ursula_or_sprout} responded with 404 to 'ping' endpoint and does not support availability checks")
+                self.log.debug(f"{ursula_or_sprout.checksum_address} responded with 404 to 'ping' endpoint and does not support availability checks")
                 continue
-            except Teacher.InvalidNode as e:
+            except self.__ursula.InvalidNode as e:
                 # node sampled is invalid
                 cleaned_error = str(e).replace('{', '').replace('}', '')
                 self.log.debug(f"{ursula_or_sprout.checksum_address} is invalid and cannot be used for availability check: {cleaned_error}")
