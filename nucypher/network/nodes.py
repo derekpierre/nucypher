@@ -350,7 +350,7 @@ class Learner:
         restored_from_disk = []
         invalid_nodes = defaultdict(list)
         for node in stored_nodes:
-            node_domain = node.domain.decode('utf-8')
+            node_domain = node.serving_domain
             if node_domain != self.learning_domain:
                 invalid_nodes[node_domain].append(node)
                 continue
@@ -1359,7 +1359,7 @@ class Teacher:
                    "last_seen": last_seen,
                    "fleet_state": node.fleet_state_checksum or 'unknown',
                    "fleet_state_icon": fleet_icon,
-                   "domain": node.learning_domain,
+                   #"domain": node.learning_domain,
                    'version': nucypher.__version__}
         return payload
 
