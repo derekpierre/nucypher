@@ -19,12 +19,13 @@
 import random
 from collections import OrderedDict
 from collections import namedtuple, defaultdict
+from threading import Lock
 from typing import Iterator, Callable, List, Dict, Union, Optional
 
 import binascii
 import maya
 from bytestring_splitter import BytestringSplitter
-from constant_sorrow.constants import NO_KNOWN_NODES
+from constant_sorrow.constants import NO_KNOWN_NODES, UNVERIFIED
 
 from nucypher.crypto.api import keccak_digest
 from nucypher.utilities.logging import Logger
@@ -68,28 +69,44 @@ class FleetSensor:
         self.__nodes = OrderedDict()       # memory.  # TODO: keep both collections or reduce to use one?
         self.__marked = defaultdict(list)  # bucketing.
 
+        # Lock
+        self.__lock = Lock()
+
     def track(self, node_or_sprout) -> None:
         if node_or_sprout.domain != self.domain:
             raise self.WrongDomain(f'Learning about {self.domain} but node is on {node_or_sprout.domain}')
-        self.__nodes[node_or_sprout.checksum_address] = node_or_sprout
+
+        with self.__lock:
+            self.__nodes[node_or_sprout.checksum_address] = node_or_sprout
+
+            # Set UNVERIFIED bucket as default for new nodes, but don't relabel prior nodes.
+            unlabeled = self.get_label(node=node_or_sprout) is None
+            if unlabeled:
+                self.label(node=node_or_sprout, label=UNVERIFIED)
+
         if self._tracking:
             self.log.info("Updating fleet state after saving node {}".format(node_or_sprout))
             self.record_fleet_state()
 
     def __bool__(self):
-        return bool(self.__nodes)
+        with self.__lock:
+            return bool(self.__nodes)
 
     def __contains__(self, item):
-        return item in self.__nodes.keys() or item in self.__nodes.values()
+        with self.__lock:
+            return item in self.__nodes.keys() or item in self.__nodes.values()
 
     def __len__(self):
-        return len(self.__nodes)
+        with self.__lock:
+            return len(self.__nodes)
 
     def __eq__(self, other):
-        return self.__nodes == other.__nodes
+        with self.__lock:
+            return self.__nodes == other.__nodes
 
     def __repr__(self):
-        return self.__nodes.__repr__()
+        with self.__lock:
+            return self.__nodes.__repr__()
 
     def population(self):
         return len(self) + len(self.additional_nodes_to_track)
@@ -118,7 +135,8 @@ class FleetSensor:
         return self.nickname.icon
 
     def addresses(self):
-        return self.__nodes.keys()
+        with self.__lock:
+            return self.__nodes.keys()
 
     def snapshot(self):
         fleet_state_checksum_bytes = binascii.unhexlify(self.checksum)
@@ -129,10 +147,11 @@ class FleetSensor:
         if additional_nodes_to_track:
             self.additional_nodes_to_track.extend(additional_nodes_to_track)
 
-        if not self.__nodes:
-            # No news here.
-            return
-        sorted_nodes = self.sorted()
+        with self.__lock:
+            if not self.__nodes:
+                # No news here.
+                return
+            sorted_nodes = self.sorted()
 
         sorted_nodes_joined = b"".join(bytes(n) for n in sorted_nodes)
         checksum = keccak_digest(sorted_nodes_joined).hex()
@@ -157,11 +176,15 @@ class FleetSensor:
         self.record_fleet_state(additional_nodes_to_track)
 
     def sorted(self):
-        nodes_to_consider = list(self.__nodes.values()) + self.additional_nodes_to_track
+        with self.__lock:
+            nodes_to_consider = list(self.__nodes.values()) + self.additional_nodes_to_track
+
         return sorted(nodes_to_consider, key=lambda n: n.checksum_address)
 
     def shuffled(self):
-        nodes_we_know_about = list(self.__nodes.values())
+        with self.__lock:
+            nodes_we_know_about = list(self.__nodes.values())
+
         random.shuffle(nodes_we_know_about)
         return nodes_we_know_about
 
@@ -183,35 +206,38 @@ class FleetSensor:
 
     def get_nodes(self, label=None) -> Iterator["Teacher"]:
         """If label is None return all known nodes"""
-        if label is None:
-            return iter(self.__nodes.values())
+        with self.__lock:
+            if label is None:
+                return iter(self.__nodes.values())
 
-        if label not in BUCKETS:
-            raise self.UnknownLabel(f'{label} is not a valid node label')
+            if label not in BUCKETS:
+                raise self.UnknownLabel(f'{label} is not a valid node label')
 
-        try:
-            nodes = iter(self.__marked[label])
-        except KeyError:
-            return list()  # empty
-        return nodes
+            try:
+                nodes = iter(self.__marked[label])
+            except KeyError:
+                return list()  # empty
+            return nodes
 
     def get_node(self, checksum_address: str, label: Optional[str] = None) -> "Teacher":
-        try:
-            node = self.__nodes[checksum_address]
-        except KeyError:
-            raise self.UnknownNode
-        if label:
-            existing_label = self.get_label(node=node)
-            if label == existing_label:
-                return node
-            else:
+        with self.__lock:
+            try:
+                node = self.__nodes[checksum_address]
+            except KeyError:
                 raise self.UnknownNode
-        return node
+            if label:
+                existing_label = self.get_label(node=node)
+                if label == existing_label:
+                    return node
+                else:
+                    raise self.UnknownNode
+            return node
 
     def get_label(self, node: "Teacher") -> Union["Teacher", None]:
-        for _label in BUCKETS:
-            if node in self.__marked[_label]:
-                return _label
+        with self.__lock:
+            for _label in BUCKETS:
+                if node in self.__marked[_label]:
+                    return _label
         return None
 
     def label(self, label, node: "Teacher") -> None:
@@ -222,27 +248,30 @@ class FleetSensor:
         """
         if label not in BUCKETS:
             raise self.UnknownLabel(f'{label} is not a valid node label')
-        if self.__nodes.get(node.checksum_address):
-            self.unlabel(node=node)            # Remove any existing labels...
-            self.__marked[label].append(node)  # Set the new label
-        else:
-            raise self.UnknownNode(f'Cannot label an unknown node ({node}).')
+
+        with self.__lock:
+            if self.__nodes.get(node.checksum_address):
+                self.unlabel(node=node)            # Remove any existing labels...
+                self.__marked[label].append(node)  # Set the new label
+            else:
+                raise self.UnknownNode(f'Cannot label an unknown node ({node}).')
 
     def unlabel(self, node: "Teacher", label=None) -> None:
         """Removes a label from a node, or if label is None, all labels are removed."""
 
-        # Remove one label
-        if label:
-            if node in self.__marked[label]:
-                self.__marked[label].remove(node)
-            return
+        with self.__lock:
+            # Remove one label
+            if label:
+                if node in self.__marked[label]:
+                    self.__marked[label].remove(node)
+                return
 
-        # Remove all labels
-        node_labels = []
-        for _label in BUCKETS:
-            if node in self.__marked[_label]:
-                self.__marked[_label].remove(node)
-                node_labels.append(_label)
+            # Remove all labels
+            node_labels = []
+            for _label in BUCKETS:
+                if node in self.__marked[_label]:
+                    self.__marked[_label].remove(node)
+                    node_labels.append(_label)
 
         # extra check to ensure that nodes only ever have one label
         if len(node_labels) > 1:
@@ -255,15 +284,17 @@ class FleetSensor:
             strategies = PRUNING_STRATEGIES[label]
         except KeyError:
             raise ValueError(f'"{label}" does not have a pruning strategy.')
-        for node in self.get_nodes(label=label):
-            for strategy in strategies:
-                keep = strategy(node=node)
-                if not keep:
-                    del self.__nodes[node.checksum_address]  # prune node
-                    self.unlabel(node=node, label=label)     # prune corresponding label
-                    break  # this node is already doomed anyways
-                    # TODO: forget node from disk too
-                    # TODO: Trash can label?
+
+        with self.__lock:
+            for node in self.get_nodes(label=label):
+                for strategy in strategies:
+                    keep = strategy(node=node)
+                    if not keep:
+                        del self.__nodes[node.checksum_address]  # prune node
+                        self.unlabel(node=node, label=label)     # prune corresponding label
+                        break  # this node is already doomed anyways
+                        # TODO: forget node from disk too
+                        # TODO: Trash can label?
 
     def prune_nodes(self) -> None:
         """Apply node pruning strategies to all marked nodes once"""

@@ -528,11 +528,6 @@ class Learner:
             self.log.info(wrong_domain)
             return False
 
-        # Set UNVERIFIED bucket as default for new nodes, but don't relabel prior nodes.
-        unlabeled = self.known_nodes.get_label(node=node) is None
-        if unlabeled:
-            self.known_nodes.label(node=node, label=UNVERIFIED)
-
         # Handle eager verification.
         if eager:
             node.mature()
