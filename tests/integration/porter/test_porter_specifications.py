@@ -25,7 +25,7 @@ from nucypher.control.specifications.exceptions import InvalidArgumentCombo, Inv
 from nucypher.crypto.powers import DecryptingPower
 from nucypher.policy.collections import WorkOrder as WorkOrderClass
 from nucypher.policy.policies import Arrangement
-from nucypher.utilities.porter.control.specifications.fields.ursulainfo import UrsulaInfo
+from nucypher.utilities.porter.control.specifications.fields import UrsulaInfo
 from nucypher.utilities.porter.control.specifications.porter_schema import (
     AliceGetUrsulas,
     AlicePublishTreasureMap,

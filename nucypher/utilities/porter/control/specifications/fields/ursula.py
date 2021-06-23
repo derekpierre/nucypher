@@ -17,8 +17,11 @@
 
 from eth_utils import to_checksum_address
 from marshmallow import fields
+from marshmallow.fields import URL
 
+from nucypher.characters.control.specifications.fields import Key
 from nucypher.cli import types
+from nucypher.control.specifications.base import BaseSchema
 from nucypher.control.specifications.exceptions import InvalidInputData
 from nucypher.control.specifications.fields import BaseField
 
@@ -32,3 +35,10 @@ class UrsulaChecksumAddress(BaseField, fields.String):
             return to_checksum_address(value=value)
         except ValueError as e:
             raise InvalidInputData(f"Could not convert input for {self.name} to a valid checksum address: {e}")
+
+
+class UrsulaInfo(BaseSchema):
+    """Schema for the result of sampling of Ursulas."""
+    checksum_address = UrsulaChecksumAddress()
+    uri = URL()
+    encrypting_key = Key()
