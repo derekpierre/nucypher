@@ -14,7 +14,7 @@
  You should have received a copy of the GNU Affero General Public License
  along with nucypher.  If not, see <https://www.gnu.org/licenses/>.
 """
-from typing import List, Optional, Iterable
+from typing import List, Optional, Iterable, Dict
 
 from constant_sorrow.constants import NO_CONTROL_PROTOCOL, NO_BLOCKCHAIN_CONNECTION
 from eth_typing import ChecksumAddress
@@ -31,6 +31,7 @@ from nucypher.control.controllers import WebController, JSONRPCController
 from nucypher.crypto.powers import DecryptingPower
 from nucypher.network.nodes import Learner
 from nucypher.network import treasuremap
+from nucypher.policy.collections import Revocation
 from nucypher.policy.policies import TreasureMapPublisher
 from nucypher.policy.reservoir import (
     make_federated_staker_reservoir,
@@ -70,10 +71,17 @@ the Pipe for nucypher network operations
     class UrsulaInfo:
         """Simple object that stores relevant Ursula information resulting from sampling."""
 
-        def __init__(self, checksum_address: str, uri: str, encrypting_key: UmbralPublicKey):
+        def __init__(self, checksum_address: ChecksumAddress, uri: str, encrypting_key: UmbralPublicKey):
             self.checksum_address = checksum_address
             self.uri = uri
             self.encrypting_key = encrypting_key
+
+    class RevokeFailure:
+        """Simple object that stores failures associated with revocation attempts."""
+
+        def __init__(self, checksum_address: ChecksumAddress, failure: str):
+            self.ursula = checksum_address
+            self.failure = failure
 
     def __init__(self,
                  domain: str = None,
@@ -162,6 +170,9 @@ the Pipe for nucypher network operations
         successes = worker_pool.block_until_target_successes()
         ursulas_info = successes.values()
         return list(ursulas_info)
+
+    def revoke(self, m: int, n: int, revocations: Dict[ChecksumAddress, Revocation]):
+        pass
 
     def _make_staker_reservoir(self,
                                quantity: int,

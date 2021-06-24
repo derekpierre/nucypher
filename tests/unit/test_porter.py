@@ -27,7 +27,8 @@ from nucypher.utilities.porter.control.specifications.fields import (
     TreasureMapID,
     UrsulaChecksumAddress,
     WorkOrder,
-    WorkOrderResult
+    WorkOrderResult,
+    Revocation
 )
 
 
@@ -73,6 +74,20 @@ def test_ursula_checksum_address_field(get_random_checksum_address):
 
     with pytest.raises(InvalidInputData):
         field._deserialize(value="0xdeadbeef", attr=None, data=None)
+
+
+def test_revocation_field(enacted_federated_policy):
+    field = Revocation()
+
+    for revocation in enacted_federated_policy.revocation_kit:
+        serialized = field._serialize(value=revocation, attr=None, obj=None)
+        assert serialized == b64encode(bytes(revocation)).decode()
+
+        deserialized = field._deserialize(value=serialized, attr=None, data=None)
+        assert deserialized == revocation
+
+    with pytest.raises(InvalidInputData):
+        field.deserialize(value=b64encode(b"I am a revocation object").decode(), attr=None, data=None)
 
 
 def test_work_order_field(mock_ursula_reencrypts,

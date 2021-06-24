@@ -22,6 +22,7 @@ from umbral.keys import UmbralPublicKey
 from nucypher.characters.control.specifications.fields import TreasureMap
 from nucypher.control.interfaces import ControlInterface, attach_schema
 from nucypher.utilities.porter.control.specifications import porter_schema
+from nucypher.utilities.porter.control.specifications.fields import RevokeInfo
 
 
 class PorterInterface(ControlInterface):
@@ -60,12 +61,18 @@ class PorterInterface(ControlInterface):
         return response_data
 
     @attach_schema(porter_schema.AliceRevoke)
-    def revoke(self) -> dict:
-        # Steps (analogous to nucypher.character.control.interfaces):
-        # 1. creation of objects / setup
-        # 2. call self.implementer.some_function() i.e. Porter learner has an associated function to call
-        # 3. create response
-        pass
+    def revoke(self, m: int, n: int, revocations: dict) -> dict:
+        revocation_info = {}
+        for revoke_info in revocations['revocations']:  # list of RevokeInfo objects
+            revocation_info[revoke_info.ursula] = revoke_info.revocation
+
+        failures = self.implementer.revoke(m=m, n=n, revocations=revocation_info)
+        response_data = {
+            "failed_revocations": len(failures),
+            "failures": failures
+        }
+        return response_data
+
 
     #
     # Bob Endpoints

@@ -25,13 +25,20 @@ from nucypher.control.specifications.exceptions import InvalidArgumentCombo, Inv
 from nucypher.crypto.powers import DecryptingPower
 from nucypher.policy.collections import WorkOrder as WorkOrderClass
 from nucypher.policy.policies import Arrangement
-from nucypher.utilities.porter.control.specifications.fields import UrsulaInfo
+from nucypher.utilities.porter.control.specifications.fields import (
+    UrsulaInfoSchema,
+    Revocation,
+    RevokeInfo,
+    RevokeFailureSchema
+)
 from nucypher.utilities.porter.control.specifications.porter_schema import (
     AliceGetUrsulas,
     AlicePublishTreasureMap,
+    AliceRevoke,
     BobGetTreasureMap,
     BobExecWorkOrder
 )
+from nucypher.utilities.porter.porter import Porter
 
 
 def test_alice_get_ursulas_schema(get_random_checksum_address):
@@ -136,15 +143,13 @@ def test_alice_get_ursulas_schema(get_random_checksum_address):
     expected_ursulas_info = []
     port = 11500
     for i in range(3):
-        ursula_info = {
-            "checksum_address": get_random_checksum_address(),
-            "uri": f"https://127.0.0.1:{port+i}",
-            "encrypting_key": UmbralPrivateKey.gen_key().pubkey
-        }
+        ursula_info = Porter.UrsulaInfo(get_random_checksum_address(),
+                                        f"https://127.0.0.1:{port+i}",
+                                        UmbralPrivateKey.gen_key().pubkey)
         ursulas_info.append(ursula_info)
 
         # use schema to determine expected output (encrypting key gets changed to hex)
-        expected_ursulas_info.append(UrsulaInfo().dump(ursula_info))
+        expected_ursulas_info.append(UrsulaInfoSchema().dump(ursula_info))
 
     output = AliceGetUrsulas().dump(obj={'ursulas': ursulas_info})
     assert output == {"ursulas": expected_ursulas_info}
@@ -205,8 +210,149 @@ def test_alice_publish_treasure_map_schema_federated_context(enacted_federated_p
         alice_publish_treasure_map_schema.load(required_data)
 
 
-def test_alice_revoke():
-    pass  # TODO
+def test_alice_revoke(enacted_federated_policy, get_random_checksum_address):
+    alice_revoke_schema = AliceRevoke()
+    with pytest.raises(InvalidInputData):
+        alice_revoke_schema.load({})
+
+    revocation_field = Revocation()
+
+    # required data
+    revocation_list = []
+    for node_id, arrangement_id in enacted_federated_policy.treasure_map:
+        revocation = enacted_federated_policy.revocation_kit[node_id]
+        revoke_data = {
+            "ursula": node_id,
+            "revocation": revocation_field._serialize(value=revocation, attr=None, obj=None)
+        }
+        revocation_list.append(revoke_data)
+    m = (len(revocation_list) // 2) + 1
+    n = len(revocation_list)
+    assert m <= n, "just double check that m and n values are valid"
+
+    required_data = {
+        "m": m,
+        "n": n,
+        "revocations": revocation_list
+    }
+
+    # required args
+    result = alice_revoke_schema.load(required_data)
+    assert result['m'] == m
+    assert result['n'] == n
+    deserialized_revocation_list = result['revocations']
+    assert len(deserialized_revocation_list) == len(revocation_list)
+    # ensure that result contains RevokeInfo objects, and that the values match
+    for i, revoke_info in enumerate(deserialized_revocation_list):
+        assert isinstance(revoke_info, RevokeInfo)  # data converted to RevokeInfo data object
+        assert revoke_info.ursula == revocation_list[i]['ursula']
+        assert revoke_info.revocation == enacted_federated_policy.revocation_kit[revocation_list[i]['ursula']]
+
+    # invalid entry
+    invalid_data = {"invalid_key": revocation_list}
+    with pytest.raises(InvalidInputData):
+        alice_revoke_schema.load(invalid_data)
+
+    # invalid m and n
+    invalid_m = {
+        "m": n+1,  # can't be larger than n
+        "n": n,
+        "revocations": revocation_list
+    }
+    with pytest.raises(InvalidArgumentCombo):
+        alice_revoke_schema.load(invalid_m)
+
+    invalid_n_too_big = {
+        "m": m,
+        "n": n + 1,  # can't be larger than revocation list
+        "revocations": revocation_list
+    }
+    with pytest.raises(InvalidArgumentCombo):
+        alice_revoke_schema.load(invalid_n_too_big)
+
+    assert m <= (n-1)  # ensure test checking the right thing
+    invalid_n_too_small = {
+        "m": m,
+        "n": n - 1,  # can't be smaller than revocation list
+        "revocations": revocation_list
+    }
+    with pytest.raises(InvalidArgumentCombo):
+        alice_revoke_schema.load(invalid_n_too_small)
+
+    # invalid revocation bytes
+    invalid_revocation_bytes = {
+        "m": 1,
+        "n": 1,
+        "revocations": [{
+            "ursula": get_random_checksum_address(),
+            "revocation": b64encode(b"these are not revocation bytes").decode()
+        }]
+    }
+    with pytest.raises(InvalidInputData):
+        alice_revoke_schema.load(invalid_revocation_bytes)
+
+    # missing revocation
+    missing_revocation = {
+        "m": 1,
+        "n": 1,
+        "revocations": [{
+            "ursula": get_random_checksum_address()
+        }]
+    }
+    with pytest.raises(InvalidInputData):
+        alice_revoke_schema.load(missing_revocation)
+
+    # missing ursula
+    revocation = list(enacted_federated_policy.revocation_kit.revocations.values())[0]
+    missing_ursula = {
+        "m": 1,
+        "n": 1,
+        "revocations": [{
+            "revocation": revocation_field._serialize(value=revocation, attr=None, obj=None)
+        }]
+    }
+    with pytest.raises(InvalidInputData):
+        alice_revoke_schema.load(missing_ursula)
+
+    #
+    # Output
+    #
+
+    # success case
+    result = {
+        "failed_revocations": 0,
+        "failures": []
+    }
+    output = alice_revoke_schema.dump(obj=result)
+    assert output == result
+
+    # failure cases
+    # 1 failure
+    one_failure = {
+        "failed_revocations": 1,
+        "failures": [
+            # use schema to determine expected output (RevokeFailure data object gets converted)
+            RevokeFailureSchema().dump(Porter.RevokeFailure(get_random_checksum_address(),
+                                                            "some people want to watch the world burn"))
+        ]
+    }
+    output = alice_revoke_schema.dump(obj=one_failure)
+    assert output == one_failure
+
+    # 2 failures
+    two_failures = {
+        "failed_revocations": 2,
+        "failures": [
+            # use schema to determine expected output (RevokeFailure data object gets converted)
+            RevokeFailureSchema().dump(Porter.RevokeFailure(get_random_checksum_address(),
+                                                            "some people want to watch the world burn")),
+            # use schema to determine expected output (RevokeFailure data object gets converted)
+            RevokeFailureSchema().dump(Porter.RevokeFailure(get_random_checksum_address(),
+                                                            "they can't be bought, bullied, reasoned, or negotiated with"))
+        ]
+    }
+    output = alice_revoke_schema.dump(obj=two_failures)
+    assert output == two_failures
 
 
 def test_bob_get_treasure_map(enacted_federated_policy, federated_alice, federated_bob):

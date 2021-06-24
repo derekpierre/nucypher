@@ -93,7 +93,7 @@ class AliceGetUrsulas(BaseSchema):
         load_only=True)
 
     # output
-    ursulas = marshmallow_fields.List(marshmallow_fields.Nested(fields.UrsulaInfo), dump_only=True)
+    ursulas = marshmallow_fields.List(marshmallow_fields.Nested(fields.UrsulaInfoSchema), dump_only=True)
     
     @validates_schema
     def check_valid_quantity_and_include_ursulas(self, data, **kwargs):
@@ -133,7 +133,29 @@ class AlicePublishTreasureMap(BaseSchema):
 
 
 class AliceRevoke(BaseSchema):
-    pass  # TODO need to understand revoke process better
+    m = base_fields.PositiveInteger(required=True, load_only=True)
+    n = base_fields.PositiveInteger(required=True, load_only=True)
+    revocations = marshmallow_fields.List(marshmallow_fields.Nested(fields.RevokeInfoSchema),
+                                          required=True,
+                                          load_only=True)  # TODO click?
+
+    # output
+    failed_revocations = base_fields.PositiveInteger(dump_only=True)
+    failures = marshmallow_fields.List(marshmallow_fields.Nested(fields.RevokeFailureSchema), dump_only=True)
+
+    @validates_schema
+    def check_valid_m_and_n(self, data, **kwargs):
+        m = data.get('m')
+        n = data.get('n')
+        if m > n:
+            raise InvalidArgumentCombo(f"Invalid 'm' and 'n' values; m ({m}) cannot be greater than n ({n})")
+
+    @validates_schema
+    def check_sufficient_revocations(self, data, **kwargs):
+        n = data.get('n')
+        revocations = data.get('revocations')
+        if len(revocations) != n:
+            raise InvalidArgumentCombo(f"Number of revocations provided should be equal to 'n'")
 
 
 #
