@@ -298,7 +298,7 @@ def test_bob_exec_work_order(mock_ursula_reencrypts,
     work_order_b64 = b64encode(work_order_bytes).decode()
     required_data = {
         'ursula': ursula.checksum_address,
-        'work_order': work_order_b64
+        'work_order_payload': work_order_b64
     }
 
     # required args
@@ -309,7 +309,7 @@ def test_bob_exec_work_order(mock_ursula_reencrypts,
     with pytest.raises(InvalidInputData):
         BobExecWorkOrder().load(updated_data)
 
-    updated_data = {k: v for k, v in required_data.items() if k != 'work_order'}
+    updated_data = {k: v for k, v in required_data.items() if k != 'work_order_payload'}
     with pytest.raises(InvalidInputData):
         BobExecWorkOrder().load(updated_data)
 
