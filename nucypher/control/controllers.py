@@ -310,7 +310,19 @@ class WebController(InterfaceControlServer):
 
         try:
             request_data = control_request.data
-            request_body = json.loads(request_data) if request_data else dict()
+            request_body = json.loads(request_data) if request_data else dict()  # get payload data if available
+
+            # handle query strings for GET endpoints
+            if control_request.method == 'GET' and hasattr(control_request, 'args'):
+                request_args = control_request.args
+                parameters = request_args.keys()
+                for parameter in parameters:
+                    value = request_args.get(parameter)
+                    if ',' in value:
+                        # expected to be list
+                        value = value.strip(',').split(',')  # ensure no trailing commas for 1-entry lists
+                    request_body[parameter] = value
+
             request_body.update(kwargs)
 
             if method_name not in self._get_interfaces():
