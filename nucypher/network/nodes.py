@@ -268,7 +268,8 @@ class Learner:
 
         from nucypher.characters.lawful import Ursula
         self.node_class = node_class or Ursula
-        self.node_class.set_cert_storage_function(node_storage.store_node_certificate)  # TODO: Fix this temporary workaround for on-disk cert storage.  #1481
+        self.node_class.set_cert_storage_function(
+            node_storage.store_node_certificate)  # TODO: Fix this temporary workaround for on-disk cert storage.  #1481
 
         known_nodes = known_nodes or tuple()
         self.unresponsive_startup_nodes = list()  # TODO: Buckets - Attempt to use these again later  #567
@@ -816,7 +817,7 @@ class Learner:
             # TODO: Bucket separately and report.
             unresponsive_nodes.add(current_teacher)  # This does nothing.
             self.known_nodes.mark_as(current_teacher.InvalidNode, current_teacher)
-            self.log.warn(f"Teacher {str(current_teacher)} is invalid: {bytes(current_teacher)}:{e}.")
+            self.log.warn(f"Teacher {str(current_teacher)} is invalid (hex={bytes(current_teacher).hex()}):{e}.")
             self.suspicious_activities_witnessed['vladimirs'].append(current_teacher)
             return
         except RuntimeError as e:
@@ -825,10 +826,14 @@ class Learner:
                 # TODO: Sort this out.
                 return RELAX
             else:
-                self.log.warn(f"Unhandled error while learning from {str(current_teacher)}: {bytes(current_teacher)}:{e}.")
+                self.log.warn(
+                    f"Unhandled error while learning from {str(current_teacher)} "
+                    f"(hex={bytes(current_teacher).hex()}):{e}.")
                 raise
         except Exception as e:
-            self.log.warn(f"Unhandled error while learning from {str(current_teacher)}: {bytes(current_teacher)}:{e}.")  # To track down 2345 / 1698
+            self.log.warn(
+                f"Unhandled error while learning from {str(current_teacher)} "
+                f"(hex={bytes(current_teacher).hex()}):{e}.")  # To track down 2345 / 1698
             raise
         finally:
             # Is cycling happening in the right order?
