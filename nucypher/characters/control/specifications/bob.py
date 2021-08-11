@@ -33,7 +33,7 @@ class Retrieve(BaseSchema):
     policy_encrypting_key = character_fields.Key(
         required=True,
         load_only=True,
-        click=options.option_policy_encrypting_key(required=False)
+        click=options.option_policy_encrypting_key(required=True)
     )
     alice_verifying_key = character_fields.Key(
         required=False,
@@ -48,8 +48,18 @@ class Retrieve(BaseSchema):
     message_kit = character_fields.MessageKit(
         required=True,
         load_only=True,
-        click=options.option_message_kit(required=False)
+        click=options.option_message_kit(required=True)
     )
+    # optional
+    treasure_map = character_fields.TreasureMap(
+        required=False,
+        load_only=True,
+        click=click.option(
+            '--treasure-map',
+            '-t',
+            help="Treasure Map for retrieve",
+            type=click.STRING,
+            required=False))
 
     treasure_map = EncryptedTreasureMap(required=False,
                                         load_only=True,

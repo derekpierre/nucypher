@@ -107,9 +107,7 @@ from nucypher.policy.hrac import HRAC
 from nucypher.policy.kits import MessageKit, PolicyMessageKit, RetrievalKit
 from nucypher.policy.maps import TreasureMap, EncryptedTreasureMap, AuthorizedKeyFrag
 from nucypher.policy.orders import (
-        RetrievalWorkOrder,
         ReencryptionRequest,
-        ReencryptionResponse,
         RetrievalHistory,
         RetrievalPlan,
         RetrievalResult,
