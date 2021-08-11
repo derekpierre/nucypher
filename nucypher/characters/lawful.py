@@ -20,7 +20,7 @@ import contextlib
 import json
 import time
 from base64 import b64encode
-from collections import OrderedDict, defaultdict, namedtuple
+from collections import namedtuple
 from datetime import datetime
 from functools import partial
 from json.decoder import JSONDecodeError

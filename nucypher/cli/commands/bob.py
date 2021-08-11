@@ -355,6 +355,7 @@ def retrieve(general_config,
              alice_verifying_key,
              treasure_map,
              message_kit,
+             treasure_map,
              ipfs,
              alice,
              decode,
@@ -412,6 +413,9 @@ def retrieve(general_config,
         'message_kit': message_kit,
         'treasure_map': treasure_map
     }
+    # optional
+    if treasure_map:
+        bob_request_data['treasure_map'] = treasure_map
 
     response = BOB.controller.retrieve(request=bob_request_data)
     if decode:
