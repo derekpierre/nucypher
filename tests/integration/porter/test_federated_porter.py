@@ -64,7 +64,6 @@ def test_get_ursulas(federated_porter, federated_ursulas):
 
 
 def test_retrieve_cfrags(federated_porter,
-                         federated_ursulas,
                          federated_bob,
                          federated_alice,
                          enacted_federated_policy):
