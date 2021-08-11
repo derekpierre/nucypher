@@ -28,7 +28,6 @@ from nucypher.crypto.umbral_adapter import PublicKey
 from nucypher.network.middleware import RestMiddleware
 from nucypher.policy.hrac import HRAC
 from nucypher.policy.kits import MessageKit
-from nucypher.policy.maps import EncryptedTreasureMap
 
 
 class CharacterPublicInterface(ControlInterface):
@@ -167,7 +166,7 @@ class BobInterface(CharacterPublicInterface):
                  policy_encrypting_key: PublicKey,
                  alice_verifying_key: PublicKey,
                  message_kit: bytes,
-                 treasure_map: Union[bytes, str, 'TreasureMap']):
+                 treasure_map: 'TreasureMap'):
         """
         Character control endpoint for re-encrypting and decrypting policy data.
         """
@@ -178,13 +177,6 @@ class BobInterface(CharacterPublicInterface):
         enrico = Enrico.from_public_keys(verifying_key=message_kit.sender_verifying_key,
                                          policy_encrypting_key=policy_encrypting_key,
                                          label=label)
-
-        if isinstance(treasure_map, bytes):
-            treasure_map = EncryptedTreasureMap.from_bytes(treasure_map)
-
-        if isinstance(treasure_map, str):
-            tmap_bytes = treasure_map.encode()
-            treasure_map = EncryptedTreasureMap.from_bytes(b64decode(tmap_bytes))
 
         plaintexts = self.implementer.retrieve([message_kit],
                                                enrico=enrico,
