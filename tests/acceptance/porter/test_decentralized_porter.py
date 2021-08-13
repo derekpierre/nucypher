@@ -69,21 +69,16 @@ def test_get_ursulas(blockchain_porter, blockchain_ursulas):
         assert address not in returned_ursula_addresses
 
 
-@pytest.mark.skip("To be fixed in #2768")
-def test_exec_work_order(blockchain_porter,
+def test_retrieve_cfrags(blockchain_porter,
                          random_blockchain_policy,
-                         blockchain_ursulas,
                          blockchain_bob,
                          blockchain_alice):
     # Setup
     network_middleware = MockRestMiddleware()
     # enact new random policy since idle_blockchain_policy/enacted_blockchain_policy already modified in previous tests
     enacted_policy = random_blockchain_policy.enact(network_middleware=network_middleware)  # enact but don't publish
-    ursula_address, work_order = work_order_setup(enacted_policy,
-                                                  blockchain_ursulas,
-                                                  blockchain_bob,
-                                                  blockchain_alice)
+    retrieval_args = retrieval_request_setup(enacted_policy, blockchain_bob, blockchain_alice)
+
     # use porter
-    result = blockchain_porter.exec_work_order(ursula_address=ursula_address,
-                                               work_order_payload=work_order.payload())
+    result = blockchain_porter.retrieve_cfrags(**retrieval_args)
     assert result

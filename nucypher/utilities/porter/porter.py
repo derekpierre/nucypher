@@ -151,7 +151,7 @@ the Pipe for nucypher network operations
         return list(ursulas_info)
 
     def retrieve_cfrags(self,
-                        treasure_map: TreasureMap,
+                        treasure_map: 'TreasureMap',
                         retrieval_kits: Sequence[RetrievalKit],
                         alice_verifying_key: PublicKey,
                         bob_encrypting_key: PublicKey,
