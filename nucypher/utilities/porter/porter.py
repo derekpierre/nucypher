@@ -14,23 +14,21 @@
  You should have received a copy of the GNU Affero General Public License
  along with nucypher.  If not, see <https://www.gnu.org/licenses/>.
 """
-from typing import List, Optional, Sequence, NamedTuple
+from typing import List, NamedTuple, Optional, Sequence
 
-from constant_sorrow.constants import NO_CONTROL_PROTOCOL, NO_BLOCKCHAIN_CONNECTION
+from constant_sorrow.constants import NO_BLOCKCHAIN_CONNECTION, NO_CONTROL_PROTOCOL
 from eth_typing import ChecksumAddress
-from flask import request, Response
-from nucypher.crypto.umbral_adapter import PublicKey
+from flask import Response, request
 
 from nucypher.blockchain.eth.agents import ContractAgency, StakingEscrowAgent
 from nucypher.blockchain.eth.interfaces import BlockchainInterfaceFactory
 from nucypher.blockchain.eth.registry import BaseContractRegistry, InMemoryContractRegistry
-
 from nucypher.characters.lawful import Ursula
-
-from nucypher.control.controllers import WebController, JSONRPCController
+from nucypher.control.controllers import JSONRPCController, WebController
 from nucypher.crypto.powers import DecryptingPower
-from nucypher.network.nodes import Learner
+from nucypher.crypto.umbral_adapter import PublicKey
 from nucypher.network import treasuremap
+from nucypher.network.nodes import Learner
 from nucypher.policy.policies import TreasureMapPublisher
 from nucypher.policy.reservoir import (
     make_federated_staker_reservoir,
@@ -117,8 +115,9 @@ the Pipe for nucypher network operations
                                                                timeout=self.DEFAULT_EXECUTION_TIMEOUT)
 
     def publish_treasure_map(self, treasure_map_bytes: bytes, bob_encrypting_key: PublicKey) -> None:
+        timeout = self.DEFAULT_EXECUTION_TIMEOUT
         # TODO (#2516): remove hardcoding of 8 nodes
-        self.block_until_number_of_known_nodes_is(8, timeout=self.DEFAULT_EXECUTION_TIMEOUT, learn_on_this_thread=True)
+        self.block_until_number_of_known_nodes_is(8, timeout=timeout, learn_on_this_thread=True)
         target_nodes = treasuremap.find_matching_nodes(known_nodes=self.known_nodes,
                                                        bob_encrypting_key=bob_encrypting_key)
         treasure_map_publisher = TreasureMapPublisher(treasure_map_bytes=treasure_map_bytes,
@@ -126,7 +125,16 @@ the Pipe for nucypher network operations
                                                       network_middleware=self.network_middleware,
                                                       timeout=self.DEFAULT_EXECUTION_TIMEOUT)
         treasure_map_publisher.start()  # let's do this
-        treasure_map_publisher.block_until_success_is_reasonably_likely()
+        try:
+            treasure_map_publisher.block_until_success_is_reasonably_likely()
+        except WorkerPool.OutOfValues as e:
+            msg = f"Failed to reach some Ursulas required for publication"
+            self.log.debug(f"{msg}:\n{str(e)}")
+            raise RuntimeError(msg)
+        except WorkerPool.TimedOut as e:
+            msg = f"Publication timed-out after {timeout} seconds"
+            self.log.debug(f"{msg}:\n{str(e)}")
+            raise RuntimeError(msg)
 
     def get_ursulas(self,
                     quantity: int,
@@ -134,9 +142,6 @@ the Pipe for nucypher network operations
                     exclude_ursulas: Optional[Sequence[ChecksumAddress]] = None,
                     include_ursulas: Optional[Sequence[ChecksumAddress]] = None) -> List[UrsulaInfo]:
         reservoir = self._make_staker_reservoir(quantity, duration_periods, exclude_ursulas, include_ursulas)
-
-        if len(reservoir) < quantity:
-            raise ValueError(f"Requested quantity={quantity} Ursulas, but only {len(reservoir)} are available")
 
         value_factory = PrefetchStrategy(reservoir, quantity)
 
@@ -163,14 +168,25 @@ the Pipe for nucypher network operations
                                                   learn_on_this_thread=True,
                                                   eager=True)
 
+        timeout = 1  # self.DEFAULT_EXECUTION_TIMEOUT
         worker_pool = WorkerPool(worker=get_ursula_info,
                                  value_factory=value_factory,
                                  target_successes=quantity,
-                                 timeout=self.DEFAULT_EXECUTION_TIMEOUT,
+                                 timeout=timeout,
                                  stagger_timeout=1,
                                  threadpool_size=quantity)
         worker_pool.start()
-        successes = worker_pool.block_until_target_successes()
+        try:
+            successes = worker_pool.block_until_target_successes()
+        except WorkerPool.OutOfValues as e:
+            msg = f"Failed to get requested number of Ursulas ({quantity})"
+            self.log.debug(f"{msg}:\n{str(e)}")
+            raise RuntimeError(msg)
+        except WorkerPool.TimedOut as e:
+            msg = f"Requests to Ursulas timed-out after {timeout} seconds"
+            self.log.debug(f"{msg}:\n{str(e)}")
+            raise RuntimeError(msg)
+
         ursulas_info = successes.values()
         return list(ursulas_info)
 
