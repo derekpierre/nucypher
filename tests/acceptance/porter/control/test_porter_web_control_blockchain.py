@@ -17,13 +17,11 @@
 
 import json
 import os
-from urllib.parse import urlencode
 from base64 import b64encode
-
-import pytest
-from nucypher.crypto.umbral_adapter import PublicKey
+from urllib.parse import urlencode
 
 from nucypher.crypto.powers import DecryptingPower
+from nucypher.crypto.umbral_adapter import PublicKey
 from nucypher.network.nodes import Learner
 from nucypher.policy.hrac import HRAC
 from nucypher.policy.maps import TreasureMap
@@ -87,8 +85,8 @@ def test_get_ursulas(blockchain_porter_web_controller, blockchain_ursulas):
     #
     failed_ursula_params = dict(get_ursulas_params)
     failed_ursula_params['quantity'] = len(blockchain_ursulas_list) + 1  # too many to get
-    with pytest.raises(Learner.NotEnoughNodes):
-        blockchain_porter_web_controller.get('/get_ursulas', data=json.dumps(failed_ursula_params))
+    response = blockchain_porter_web_controller.get('/get_ursulas', data=json.dumps(failed_ursula_params))
+    assert response.status_code == 500
 
 
 def test_retrieve_cfrags(blockchain_porter_web_controller,
