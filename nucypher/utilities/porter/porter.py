@@ -115,9 +115,8 @@ the Pipe for nucypher network operations
                                                                timeout=self.DEFAULT_EXECUTION_TIMEOUT)
 
     def publish_treasure_map(self, treasure_map_bytes: bytes, bob_encrypting_key: PublicKey) -> None:
-        timeout = self.DEFAULT_EXECUTION_TIMEOUT
         # TODO (#2516): remove hardcoding of 8 nodes
-        self.block_until_number_of_known_nodes_is(8, timeout=timeout, learn_on_this_thread=True)
+        self.block_until_number_of_known_nodes_is(8, timeout=self.DEFAULT_EXECUTION_TIMEOUT, learn_on_this_thread=True)
         target_nodes = treasuremap.find_matching_nodes(known_nodes=self.known_nodes,
                                                        bob_encrypting_key=bob_encrypting_key)
         treasure_map_publisher = TreasureMapPublisher(treasure_map_bytes=treasure_map_bytes,
@@ -125,16 +124,7 @@ the Pipe for nucypher network operations
                                                       network_middleware=self.network_middleware,
                                                       timeout=self.DEFAULT_EXECUTION_TIMEOUT)
         treasure_map_publisher.start()  # let's do this
-        try:
-            treasure_map_publisher.block_until_success_is_reasonably_likely()
-        except WorkerPool.OutOfValues as e:
-            msg = f"Failed to reach some Ursulas required for publication"
-            self.log.debug(f"{msg}:\n{str(e)}")
-            raise RuntimeError(msg)
-        except WorkerPool.TimedOut as e:
-            msg = f"Publication timed-out after {timeout} seconds"
-            self.log.debug(f"{msg}:\n{str(e)}")
-            raise RuntimeError(msg)
+        treasure_map_publisher.block_until_success_is_reasonably_likely()
 
     def get_ursulas(self,
                     quantity: int,
@@ -142,7 +132,6 @@ the Pipe for nucypher network operations
                     exclude_ursulas: Optional[Sequence[ChecksumAddress]] = None,
                     include_ursulas: Optional[Sequence[ChecksumAddress]] = None) -> List[UrsulaInfo]:
         reservoir = self._make_staker_reservoir(quantity, duration_periods, exclude_ursulas, include_ursulas)
-
         value_factory = PrefetchStrategy(reservoir, quantity)
 
         def get_ursula_info(ursula_address) -> Porter.UrsulaInfo:
@@ -168,25 +157,14 @@ the Pipe for nucypher network operations
                                                   learn_on_this_thread=True,
                                                   eager=True)
 
-        timeout = self.DEFAULT_EXECUTION_TIMEOUT
         worker_pool = WorkerPool(worker=get_ursula_info,
                                  value_factory=value_factory,
                                  target_successes=quantity,
-                                 timeout=timeout,
+                                 timeout=self.DEFAULT_EXECUTION_TIMEOUT,
                                  stagger_timeout=1,
                                  threadpool_size=quantity)
         worker_pool.start()
-        try:
-            successes = worker_pool.block_until_target_successes()
-        except WorkerPool.OutOfValues as e:
-            msg = f"Failed to get requested number of Ursulas ({quantity})"
-            self.log.debug(f"{msg}:\n{str(e)}")
-            raise RuntimeError(msg)
-        except WorkerPool.TimedOut as e:
-            msg = f"Requests to Ursulas timed-out after {timeout} seconds"
-            self.log.debug(f"{msg}:\n{str(e)}")
-            raise RuntimeError(msg)
-
+        successes = worker_pool.block_until_target_successes()
         ursulas_info = successes.values()
         return list(ursulas_info)
 
