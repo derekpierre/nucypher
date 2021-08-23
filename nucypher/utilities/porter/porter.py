@@ -25,10 +25,11 @@ from nucypher.blockchain.eth.interfaces import BlockchainInterfaceFactory
 from nucypher.blockchain.eth.registry import BaseContractRegistry, InMemoryContractRegistry
 from nucypher.characters.lawful import RetrievalClient, Ursula
 from nucypher.control.controllers import JSONRPCController, WebController
-from nucypher.crypto.kits import RetrievalKit
 from nucypher.crypto.powers import DecryptingPower
 from nucypher.crypto.umbral_adapter import PublicKey
 from nucypher.network.nodes import Learner
+from nucypher.policy.kits import RetrievalKit
+from nucypher.policy.maps import TreasureMap
 from nucypher.policy.orders import RetrievalResult
 from nucypher.policy.reservoir import (
     make_federated_staker_reservoir,
@@ -151,7 +152,7 @@ the Pipe for nucypher network operations
         return list(ursulas_info)
 
     def retrieve_cfrags(self,
-                        treasure_map: 'TreasureMap',
+                        treasure_map: TreasureMap,
                         retrieval_kits: Sequence[RetrievalKit],
                         alice_verifying_key: PublicKey,
                         bob_encrypting_key: PublicKey,

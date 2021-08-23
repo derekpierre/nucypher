@@ -19,7 +19,6 @@ import click
 
 import nucypher.control.specifications.fields as base_fields
 from nucypher.characters.control.specifications import fields as character_fields
-from nucypher.characters.control.specifications.fields.treasuremap import EncryptedTreasureMap
 from nucypher.control.specifications.base import BaseSchema
 from nucypher.cli import options
 
@@ -51,19 +50,10 @@ class Retrieve(BaseSchema):
         click=options.option_message_kit(required=True)
     )
     # optional
-    treasure_map = character_fields.TreasureMap(
+    treasure_map = character_fields.EncryptedTreasureMap(
         required=False,
         load_only=True,
-        click=click.option(
-            '--treasure-map',
-            '-t',
-            help="Treasure Map for retrieve",
-            type=click.STRING,
-            required=False))
-
-    treasure_map = EncryptedTreasureMap(required=False,
-                                        load_only=True,
-                                        click=options.option_treasure_map)
+        click=options.option_treasure_map)
 
     cleartexts = base_fields.List(character_fields.Cleartext(), dump_only=True)
 

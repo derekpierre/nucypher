@@ -20,9 +20,7 @@ import contextlib
 import json
 import time
 from base64 import b64encode
-from collections import namedtuple
 from datetime import datetime
-from functools import partial
 from json.decoder import JSONDecodeError
 from pathlib import Path
 from queue import Queue
@@ -90,7 +88,6 @@ from nucypher.crypto.umbral_adapter import (
     PublicKey,
     VerificationError,
     reencrypt,
-    KeyFrag,
     VerifiedKeyFrag,
     Signature
 )
@@ -107,11 +104,11 @@ from nucypher.policy.hrac import HRAC
 from nucypher.policy.kits import MessageKit, PolicyMessageKit, RetrievalKit
 from nucypher.policy.maps import TreasureMap, EncryptedTreasureMap, AuthorizedKeyFrag
 from nucypher.policy.orders import (
-        ReencryptionRequest,
-        RetrievalHistory,
-        RetrievalPlan,
-        RetrievalResult,
-        )
+    ReencryptionRequest,
+    RetrievalHistory,
+    RetrievalPlan,
+    RetrievalResult, ReencryptionResponse,
+)
 from nucypher.policy.policies import Policy
 from nucypher.utilities.logging import Logger
 from nucypher.utilities.networking import validate_worker_ip
@@ -636,7 +633,7 @@ class Bob(Character):
                            bob_verifying_key=self.stamp.as_umbral_pubkey(),
                            label=label)
 
-    def get_treasure_map_from_known_ursulas(self, hrac: bytes, timeout=3):
+    def get_treasure_map_from_known_ursulas(self, hrac: HRAC, timeout=3):
         """
         Iterate through the nodes we know, asking for the TreasureMap.
         Return the first one who has it.
