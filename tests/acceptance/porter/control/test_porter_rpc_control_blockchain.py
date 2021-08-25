@@ -85,11 +85,11 @@ def test_retrieve_cfrags(blockchain_porter,
     # Setup
     network_middleware = MockRestMiddleware()
     # enact new random policy since idle_blockchain_policy/enacted_blockchain_policy already modified in previous tests
-    enacted_policy = random_blockchain_policy.enact(network_middleware=network_middleware)  # enact but don't publish
-    retrieve_cfrags_params = retrieval_request_setup(enacted_policy,
-                                                     blockchain_bob,
-                                                     blockchain_alice,
-                                                     encode_for_rest=True)
+    enacted_policy = random_blockchain_policy.enact(network_middleware=network_middleware)
+    retrieve_cfrags_params, _ = retrieval_request_setup(enacted_policy,
+                                                        blockchain_bob,
+                                                        blockchain_alice,
+                                                        encode_for_rest=True)
 
     # Success
     request_data = {'method': method, 'params': retrieve_cfrags_params}
