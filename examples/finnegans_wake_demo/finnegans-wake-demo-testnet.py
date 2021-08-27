@@ -144,7 +144,7 @@ for counter, plaintext in enumerate(finnegans_wake):
     # The matter of whether encryption makes the passage more or less readable
     # is left to the reader to determine.  Many data sources (Enricos) can
     # encrypt fot the policy's public key.
-    ciphertext, _signature = enrico.encrypt_message(plaintext)
+    ciphertext = enrico.encrypt_message(plaintext)
     enrico_public_key = bytes(enrico.stamp)
     del enrico
 

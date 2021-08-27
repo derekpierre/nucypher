@@ -302,7 +302,7 @@ Encrypt
    from nucypher.characters.lawful import Enrico
 
    enrico = Enrico(policy_encrypting_key=policy_encrypting_key)
-   ciphertext, signature = enrico.encrypt_message(plaintext=b'Peace at dawn.')
+   ciphertext = enrico.encrypt_message(plaintext=b'Peace at dawn.')
 
 
 The ciphertext can then be sent to Bob via the application side channel.
