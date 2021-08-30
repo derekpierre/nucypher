@@ -94,7 +94,7 @@ def test_alice_rpc_character_control_create_policy(alice_rpc_test_client, create
         assert rpc_response.id == response_id
 
 
-def test_alice_rpc_character_control_bad_input(alice_rpc_test_client, create_policy_control_request):
+def test_alice_rpc_character_control_bad_input(alice_rpc_test_client):
     alice_rpc_test_client.__class__.MESSAGE_ID = 0
 
     # Send bad data to assert error returns (Request #3)

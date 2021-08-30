@@ -15,7 +15,6 @@
  along with nucypher.  If not, see <https://www.gnu.org/licenses/>.
 """
 
-import pytest
 from tests.utils.policy import retrieval_request_setup
 
 

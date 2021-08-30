@@ -15,8 +15,6 @@
  along with nucypher.  If not, see <https://www.gnu.org/licenses/>.
 """
 
-import pytest
-
 from tests.utils.middleware import MockRestMiddleware
 from tests.utils.policy import retrieval_request_setup
 
@@ -76,7 +74,7 @@ def test_retrieve_cfrags(blockchain_porter,
     # Setup
     network_middleware = MockRestMiddleware()
     # enact new random policy since idle_blockchain_policy/enacted_blockchain_policy already modified in previous tests
-    enacted_policy = random_blockchain_policy.enact(network_middleware=network_middleware)  # enact but don't publish
+    enacted_policy = random_blockchain_policy.enact(network_middleware=network_middleware)
     retrieval_args, _ = retrieval_request_setup(enacted_policy, blockchain_bob, blockchain_alice)
 
     # use porter

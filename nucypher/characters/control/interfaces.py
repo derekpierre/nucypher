@@ -15,7 +15,7 @@
  along with nucypher.  If not, see <https://www.gnu.org/licenses/>.
 """
 
-from typing import Union
+from typing import Union, Optional
 
 import maya
 
@@ -105,7 +105,7 @@ class AliceInterface(CharacterPublicInterface):
     def revoke(self, label: bytes, bob_verifying_key: PublicKey) -> dict:
 
         # TODO: Move deeper into characters
-        policy_hrac = HRAC.derive(self.implementer.stamp.as_umbral_pubkey(), bytes(bob_verifying_key), label)
+        policy_hrac = HRAC.derive(self.implementer.stamp.as_umbral_pubkey(), bob_verifying_key, label)
         policy = self.implementer.active_policies[policy_hrac]
 
         receipt, failed_revocations = self.implementer.revoke(policy)
@@ -164,7 +164,7 @@ class BobInterface(CharacterPublicInterface):
                  policy_encrypting_key: PublicKey,
                  alice_verifying_key: PublicKey,
                  message_kit: MessageKit,
-                 treasure_map: 'EncryptedTreasureMap') -> dict:
+                 treasure_map: Optional['EncryptedTreasureMap'] = None) -> dict:
         """
         Character control endpoint for re-encrypting and decrypting policy data.
         """
