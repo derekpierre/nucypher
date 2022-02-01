@@ -144,7 +144,7 @@ option_csv_file = click.option('--csv-file',
                                type=click.Path(dir_okay=False, path_type=Path))
 option_value = click.option('--value', help="Token value of stake", type=DecimalRange(min=0))
 option_lock_periods = click.option('--lock-periods', help="Duration of stake in periods.", type=click.INT)
-option_worker_address = click.option('--worker-address', help="Address to bond as an Ursula-Worker", type=EIP55_CHECKSUM_ADDRESS)
+option_operator_address = click.option('--operator-address', help="Address to bond as an Ursula-Operator", type=EIP55_CHECKSUM_ADDRESS)
 option_index = click.option('--index', help="The staker-specific stake index to edit", type=click.INT)
 option_from_unlocked = click.option('--from-unlocked',
                                     help="Only use uncollected staking rewards and unlocked sub-stakes; not tokens from staker address",
@@ -365,10 +365,10 @@ def accounts(general_config, staker_options, config_file):
 @option_config_file
 @option_force
 @group_general_config
-@option_worker_address
+@option_operator_address
 def bond_worker(general_config: GroupGeneralConfig,
                 transacting_staker_options: TransactingStakerOptions,
-                config_file, force, worker_address):
+                config_file, force, operator_address):
     """Bond a worker to a staker."""
 
     emitter = setup_emitter(general_config)
@@ -387,17 +387,17 @@ def bond_worker(general_config: GroupGeneralConfig,
     STAKEHOLDER.assimilate(checksum_address=client_account, password=password)
     economics = STAKEHOLDER.staker.economics
 
-    if not worker_address:
-        worker_address = click.prompt(PROMPT_WORKER_ADDRESS, type=EIP55_CHECKSUM_ADDRESS)
+    if not operator_address:
+        operator_address = click.prompt(PROMPT_WORKER_ADDRESS, type=EIP55_CHECKSUM_ADDRESS)
 
-    if (worker_address == staking_address) and not force:
-        click.confirm(CONFIRM_WORKER_AND_STAKER_ADDRESSES_ARE_EQUAL.format(address=worker_address), abort=True)
+    if (operator_address == staking_address) and not force:
+        click.confirm(CONFIRM_WORKER_AND_STAKER_ADDRESSES_ARE_EQUAL.format(address=operator_address), abort=True)
 
-    # TODO: Check preconditions (e.g., minWorkerPeriods, already in use, etc)
+    # TODO: Check preconditions (e.g., minOperatorPeriods, already in use, etc)
 
     # TODO: Double-check dates
     # Calculate release datetime
-    current_period = STAKEHOLDER.staker.staking_agent.get_current_period()
+    current_period = STAKEHOLDER.staker.application_agent.get_current_period()
     bonded_date = datetime_at_period(period=current_period, seconds_per_period=economics.seconds_per_period)
     min_worker_periods = STAKEHOLDER.staker.economics.minimum_worker_periods
 
@@ -408,13 +408,13 @@ def bond_worker(general_config: GroupGeneralConfig,
 
     if not force:
         click.confirm(f"Commit to bonding "
-                      f"worker {worker_address} to staker {staking_address} "
+                      f"worker {operator_address} to staker {staking_address} "
                       f"for a minimum of {STAKEHOLDER.staker.economics.minimum_worker_periods} periods?", abort=True)
 
-    receipt = STAKEHOLDER.staker.bond_worker(worker_address=worker_address)
+    receipt = STAKEHOLDER.staker.bond_worker(operator_address=operator_address)
 
     # Report Success
-    message = SUCCESSFUL_WORKER_BONDING.format(worker_address=worker_address, staking_address=staking_address)
+    message = SUCCESSFUL_WORKER_BONDING.format(operator_address=operator_address, staking_address=staking_address)
     emitter.echo(message, color='green')
     paint_receipt_summary(emitter=emitter,
                           receipt=receipt,
@@ -445,8 +445,8 @@ def unbond_worker(general_config: GroupGeneralConfig,
         stakeholder=STAKEHOLDER,
         staking_address=transacting_staker_options.staker_options.staking_address)
 
-    # TODO: Check preconditions (e.g., minWorkerPeriods)
-    worker_address = STAKEHOLDER.staker.staking_agent.get_worker_from_staker(staking_address)
+    # TODO: Check preconditions (e.g., minOperatorPeriods)
+    operator_address = STAKEHOLDER.staker.application_agent.get_worker_from_staker(staking_address)
 
     password = get_password(stakeholder=STAKEHOLDER,
                             blockchain=blockchain,
@@ -461,10 +461,10 @@ def unbond_worker(general_config: GroupGeneralConfig,
     receipt = STAKEHOLDER.staker.unbond_worker()
 
     # TODO: Double-check dates
-    current_period = STAKEHOLDER.staker.staking_agent.get_current_period()
+    current_period = STAKEHOLDER.staker.application_agent.get_current_period()
     bonded_date = datetime_at_period(period=current_period, seconds_per_period=economics.seconds_per_period)
 
-    message = SUCCESSFUL_DETACH_WORKER.format(worker_address=worker_address, staking_address=staking_address)
+    message = SUCCESSFUL_DETACH_WORKER.format(operator_address=operator_address, staking_address=staking_address)
     emitter.echo(message, color='green')
     paint_receipt_summary(emitter=emitter,
                           receipt=receipt,
@@ -507,9 +507,9 @@ def create(general_config: GroupGeneralConfig,
     economics = STAKEHOLDER.staker.economics
 
     # Dynamic click types (Economics)
-    min_locked = economics.minimum_allowed_locked
+    min_locked = economics.min_authorization
     stake_value_range = DecimalRange(min=NU.from_units(min_locked).to_tokens(), clamp=False)
-    stake_duration_range = click.IntRange(min=economics.minimum_locked_periods, clamp=False)
+    stake_duration_range = click.IntRange(min=economics.min_operator_seconds, clamp=False)
 
     #
     # Stage Stake
@@ -520,7 +520,7 @@ def create(general_config: GroupGeneralConfig,
             click.confirm(CONFIRM_STAKE_USE_UNLOCKED, abort=True)
 
         token_balance = STAKEHOLDER.staker.calculate_staking_reward() if from_unlocked else STAKEHOLDER.staker.token_balance
-        lower_limit = NU.from_units(economics.minimum_allowed_locked)
+        lower_limit = NU.from_units(economics.min_authorization)
         locked_tokens = STAKEHOLDER.staker.locked_tokens(periods=1).to_units()
         upper_limit = min(token_balance, NU.from_units(economics.maximum_allowed_locked - locked_tokens))
 
@@ -537,15 +537,15 @@ def create(general_config: GroupGeneralConfig,
     value = NU.from_tokens(value)
 
     if not lock_periods:
-        min_locktime = economics.minimum_locked_periods
+        min_locktime = economics.min_operator_seconds
         default_locktime = economics.maximum_rewarded_periods
-        max_locktime = MAX_UINT16 - STAKEHOLDER.staker.staking_agent.get_current_period()
+        max_locktime = MAX_UINT16 - STAKEHOLDER.staker.application_agent.get_current_period()
         lock_periods = click.prompt(PROMPT_STAKE_CREATE_LOCK_PERIODS.format(min_locktime=min_locktime,
                                                                             max_locktime=max_locktime),
                                     type=stake_duration_range,
                                     default=default_locktime)
 
-    start_period = STAKEHOLDER.staker.staking_agent.get_current_period() + 1
+    start_period = STAKEHOLDER.staker.application_agent.get_current_period() + 1
     unlock_period = start_period + lock_periods
 
     #
@@ -570,7 +570,7 @@ def create(general_config: GroupGeneralConfig,
 
 
     # Consistency check to prevent the above agreement from going stale.
-    last_second_current_period = STAKEHOLDER.staker.staking_agent.get_current_period()
+    last_second_current_period = STAKEHOLDER.staker.application_agent.get_current_period()
     if start_period != last_second_current_period + 1:
         emitter.echo(PERIOD_ADVANCED_WARNING, color='red')
         raise click.Abort
@@ -640,7 +640,7 @@ def increase(general_config: GroupGeneralConfig,
     if not force:
         click.confirm(CONFIRM_INCREASING_STAKE_DISCLAIMER, abort=True)
         lock_periods = current_stake.periods_remaining - 1
-        current_period = STAKEHOLDER.staker.staking_agent.get_current_period()
+        current_period = STAKEHOLDER.staker.application_agent.get_current_period()
         unlock_period = current_stake.final_locked_period + 1
 
         confirm_large_and_or_long_stake(value=value, lock_periods=lock_periods, economics=STAKEHOLDER.staker.economics)
@@ -855,10 +855,10 @@ def divide(general_config: GroupGeneralConfig,
                             hw_wallet=transacting_staker_options.hw_wallet)
     STAKEHOLDER.assimilate(checksum_address=client_account, password=password)
     economics = STAKEHOLDER.staker.economics
-    action_period = STAKEHOLDER.staker.staking_agent.get_current_period()
+    action_period = STAKEHOLDER.staker.application_agent.get_current_period()
 
     # Dynamic click types (Economics)
-    min_locked = economics.minimum_allowed_locked
+    min_locked = economics.min_authorization
     stake_value_range = DecimalRange(min=NU.from_units(min_locked).to_tokens(), clamp=False)
 
     if index is not None:  # 0 is valid.
@@ -872,7 +872,7 @@ def divide(general_config: GroupGeneralConfig,
 
     # Value
     if not value:
-        min_allowed_locked = NU.from_units(economics.minimum_allowed_locked)
+        min_allowed_locked = NU.from_units(economics.min_authorization)
         max_divide_value = max(min_allowed_locked, current_stake.value - min_allowed_locked)
         prompt = PROMPT_STAKE_DIVIDE_VALUE.format(minimum=min_allowed_locked, maximum=str(max_divide_value))
         value = click.prompt(prompt, type=stake_value_range)
@@ -897,7 +897,7 @@ def divide(general_config: GroupGeneralConfig,
         click.confirm(CONFIRM_BROADCAST_STAKE_DIVIDE, abort=True)
 
     # Consistency check to prevent the above agreement from going stale.
-    last_second_current_period = STAKEHOLDER.staker.staking_agent.get_current_period()
+    last_second_current_period = STAKEHOLDER.staker.application_agent.get_current_period()
     if action_period != last_second_current_period:
         emitter.echo(PERIOD_ADVANCED_WARNING, color='red')
         raise click.Abort
@@ -943,7 +943,7 @@ def prolong(general_config: GroupGeneralConfig,
                             hw_wallet=transacting_staker_options.hw_wallet)
     STAKEHOLDER.assimilate(checksum_address=client_account, password=password)
 
-    action_period = STAKEHOLDER.staker.staking_agent.get_current_period()
+    action_period = STAKEHOLDER.staker.application_agent.get_current_period()
     economics = STAKEHOLDER.staker.economics
 
     # Handle stake update and selection
@@ -960,7 +960,7 @@ def prolong(general_config: GroupGeneralConfig,
     if not lock_periods:
         max_extension = MAX_UINT16 - current_stake.final_locked_period
         # +1 because current period excluded
-        min_extension = economics.minimum_locked_periods - current_stake.periods_remaining + 1
+        min_extension = economics.min_operator_seconds - current_stake.periods_remaining + 1
         if min_extension < 1:
             min_extension = 1
         duration_extension_range = click.IntRange(min=min_extension, max=max_extension, clamp=False)
@@ -970,7 +970,7 @@ def prolong(general_config: GroupGeneralConfig,
         click.confirm(CONFIRM_PROLONG.format(lock_periods=lock_periods), abort=True)
 
     # Non-interactive: Consistency check to prevent the above agreement from going stale.
-    last_second_current_period = STAKEHOLDER.staker.staking_agent.get_current_period()
+    last_second_current_period = STAKEHOLDER.staker.application_agent.get_current_period()
     if action_period != last_second_current_period:
         emitter.echo(PERIOD_ADVANCED_WARNING, color='red')
         raise click.Abort
@@ -1012,7 +1012,7 @@ def merge(general_config: GroupGeneralConfig,
                             client_account=client_account,
                             hw_wallet=transacting_staker_options.hw_wallet)
     STAKEHOLDER.assimilate(checksum_address=client_account, password=password)
-    action_period = STAKEHOLDER.staker.staking_agent.get_current_period()
+    action_period = STAKEHOLDER.staker.application_agent.get_current_period()
 
     # Handle stakes selection
     stake_1, stake_2 = None, None
@@ -1050,7 +1050,7 @@ def merge(general_config: GroupGeneralConfig,
         click.confirm(CONFIRM_MERGE.format(stake_index_1=stake_1.index, stake_index_2=stake_2.index), abort=True)
 
     # Non-interactive: Consistency check to prevent the above agreement from going stale.
-    last_second_current_period = STAKEHOLDER.staker.staking_agent.get_current_period()
+    last_second_current_period = STAKEHOLDER.staker.application_agent.get_current_period()
     if action_period != last_second_current_period:
         emitter.echo(PERIOD_ADVANCED_WARNING, color='red')
         raise click.Abort
@@ -1095,7 +1095,7 @@ def remove_inactive(general_config: GroupGeneralConfig,
                             client_account=client_account,
                             hw_wallet=transacting_staker_options.hw_wallet)
     STAKEHOLDER.assimilate(checksum_address=client_account, password=password)
-    action_period = STAKEHOLDER.staker.staking_agent.get_current_period()
+    action_period = STAKEHOLDER.staker.application_agent.get_current_period()
 
     emitter.message(FETCHING_INACTIVE_STAKES, color='yellow')
     if remove_all:
@@ -1168,7 +1168,7 @@ def events(general_config, staker_options, config_file, event_name, from_block, 
         staking_address=staker_options.staking_address)
 
     argument_filters = {'staker': staking_address}
-    agent = STAKEHOLDER.staker.staking_agent
+    agent = STAKEHOLDER.staker.application_agent
     contract_name = agent.contract_name
 
     csv_output_file = csv_file
@@ -1364,7 +1364,7 @@ def show_rewards(general_config, staker_options, config_file, periods):
                                                                          stakeholder=stakeholder,
                                                                          staking_address=staker_options.staking_address)
     blockchain = staker_options.get_blockchain()
-    staking_agent = stakeholder.staker.staking_agent
+    staking_agent = stakeholder.staker.application_agent
 
     paint_staking_rewards(stakeholder, blockchain, emitter, periods, staking_address, staking_agent)
 

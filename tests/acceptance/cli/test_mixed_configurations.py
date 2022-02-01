@@ -21,7 +21,7 @@ from pathlib import Path
 
 import pytest
 
-from nucypher.blockchain.eth.actors import Worker
+from nucypher.blockchain.eth.actors import Operator
 from nucypher.cli.main import nucypher_cli
 from nucypher.config.characters import AliceConfiguration, FelixConfiguration, UrsulaConfiguration
 from nucypher.config.constants import (
@@ -147,7 +147,7 @@ def test_coexisting_configurations(click_runner,
                  '--network', TEMPORARY_DOMAIN,
                  '--payment-network', TEMPORARY_DOMAIN,
                  '--provider', TEST_PROVIDER_URI,
-                 '--worker-address', ursula,
+                 '--operator-address', ursula,
                  '--rest-host', MOCK_IP_ADDRESS,
                  '--registry-filepath', str(agency_local_registry.filepath.absolute()),
                  '--config-root', str(custom_filepath.absolute()))
@@ -167,7 +167,7 @@ def test_coexisting_configurations(click_runner,
     init_args = ('ursula', 'init',
                  '--network', TEMPORARY_DOMAIN,
                  '--payment-network', TEMPORARY_DOMAIN,
-                 '--worker-address', another_ursula,
+                 '--operator-address', another_ursula,
                  '--rest-host', MOCK_IP_ADDRESS_2,
                  '--registry-filepath', str(agency_local_registry.filepath.absolute()),
                  '--provider', TEST_PROVIDER_URI,
@@ -198,13 +198,13 @@ def test_coexisting_configurations(click_runner,
 
     user_input = f'{INSECURE_DEVELOPMENT_PASSWORD}\n' * 2
 
-    Worker.READY_POLL_RATE = 1
-    Worker.READY_TIMEOUT = 1
-    with pytest.raises(Teacher.UnbondedWorker):
-        # Worker init success, but not bonded.
+    Operator.READY_POLL_RATE = 1
+    Operator.READY_TIMEOUT = 1
+    with pytest.raises(Operator.ActorError):
+        # Operator init success, but not bonded.
         result = click_runner.invoke(nucypher_cli, run_args, input=user_input, catch_exceptions=False)
     assert result.exit_code == 0
-    Worker.READY_TIMEOUT = None
+    Operator.READY_TIMEOUT = None
 
     # All configuration files still exist.
     assert felix_file_location.is_file()
@@ -265,7 +265,7 @@ def test_corrupted_configuration(click_runner,
 
     init_args = ('ursula', 'init',
                  '--provider', TEST_PROVIDER_URI,
-                 '--worker-address', another_ursula,
+                 '--operator-address', another_ursula,
                  '--network', TEMPORARY_DOMAIN,
                  '--payment-network', TEMPORARY_DOMAIN,
                  '--rest-host', MOCK_IP_ADDRESS,
@@ -296,7 +296,7 @@ def test_corrupted_configuration(click_runner,
                  '--network', TEMPORARY_DOMAIN,
                  '--payment-network', TEMPORARY_DOMAIN,
                  '--provider', TEST_PROVIDER_URI,
-                 '--worker-address', another_ursula,
+                 '--operator-address', another_ursula,
                  '--rest-host', MOCK_IP_ADDRESS,
                  '--registry-filepath', str(agency_local_registry.filepath.absolute()),
                  '--config-root', str(custom_filepath.absolute()))

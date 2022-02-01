@@ -75,7 +75,7 @@ def test_staker_divides_stake(staker, application_economics):
 
     staker.divide_stake(target_value=new_stake_value, stake=stake, additional_periods=2)
 
-    current_period = staker.staking_agent.get_current_period()
+    current_period = staker.application_agent.get_current_period()
     expected_old_stake = (current_period + 1, current_period + duration, stake_value - new_stake_value)
     expected_new_stake = (current_period + 1, current_period + duration + 2, new_stake_value)
 
@@ -282,13 +282,13 @@ def test_staker_collects_staking_reward(testerchain,
                             lock_periods=int(application_economics.min_operator_seconds))    # ... for the fewest number of periods
 
     # Get an unused address for a new worker
-    worker_address = testerchain.unassigned_accounts[-1]
-    staker.bond_worker(worker_address=worker_address)
+    operator_address = testerchain.unassigned_accounts[-1]
+    staker.bond_worker(operator_address=operator_address)
 
     # Create this worker and bond it with the staker
     ursula = make_decentralized_ursulas(ursula_config=ursula_decentralized_test_config,
                                         stakers_addresses=[staker.checksum_address],
-                                        workers_addresses=[worker_address],
+                                        workers_addresses=[operator_address],
                                         registry=test_registry,
                                         commit_now=False).pop()
 

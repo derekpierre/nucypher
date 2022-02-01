@@ -17,6 +17,7 @@ along with nucypher.  If not, see <https://www.gnu.org/licenses/>.
 
 
 from collections import OrderedDict
+from typing import Dict, List, Tuple
 
 from constant_sorrow.constants import (
     BARE,
@@ -26,10 +27,9 @@ from constant_sorrow.constants import (
     INIT
 )
 from eth_typing.evm import ChecksumAddress
-from typing import Dict, List, Tuple
 from web3.contract import Contract
 
-from nucypher.blockchain.economics import BaseEconomics, StandardTokenEconomics
+from nucypher.blockchain.economics import Economics
 from nucypher.blockchain.eth.agents import (
     AdjudicatorAgent,
     ContractAgency,
@@ -49,7 +49,6 @@ from nucypher.blockchain.eth.interfaces import (
     VersionedContract,
 )
 from nucypher.blockchain.eth.registry import BaseContractRegistry
-from nucypher.blockchain.eth.token import TToken
 from nucypher.crypto.powers import TransactingPower
 
 
@@ -73,7 +72,7 @@ class BaseContractDeployer:
     class ContractNotDeployed(ContractDeploymentError):
         pass
 
-    def __init__(self, registry: BaseContractRegistry, economics: BaseEconomics = None):
+    def __init__(self, registry: BaseContractRegistry, economics: Economics = None):
 
         # Validate
         self.blockchain = BlockchainInterfaceFactory.get_interface()
@@ -85,10 +84,10 @@ class BaseContractDeployer:
         self.deployment_receipts = OrderedDict()
         self._contract = CONTRACT_NOT_DEPLOYED
         self.__proxy_contract = NotImplemented
-        self.__economics = economics or StandardTokenEconomics()
+        self.__economics = economics or Economics()
 
     @property
-    def economics(self) -> BaseEconomics:
+    def economics(self) -> Economics:
         """Read-only access for economics instance."""
         return self.__economics
 
@@ -572,7 +571,7 @@ class StakingEscrowDeployer(BaseContractDeployer, UpgradeableContractMixin, Owna
                      confirmations: int = 0,
                      **overrides):
         constructor_kwargs = {
-            "_minAllowableLockedTokens": self.economics.minimum_allowed_locked,
+            "_minAllowableLockedTokens": self.economics.min_authorization,
             "_maxAllowableLockedTokens": self.economics.maximum_allowed_locked
         }
         constructor_kwargs.update(overrides)
@@ -1163,15 +1162,9 @@ class PREApplicationDeployer(BaseContractDeployer):
     deployment_steps = ('contract_deployment', )
     _upgradeable = False
 
-    def __init__(self,
-                 min_authorization: int = 0,  # TODO: Remove these args, use constants or economics
-                 min_seconds: int = 0,
-                 staking_interface: str = None,
-                 *args, **kwargs):
+    def __init__(self, staking_interface: str = None, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.threshold_staking_interface = staking_interface
-        self.min_authorization = min_authorization
-        self.min_seconds = min_seconds
 
     def deploy(self,
                transacting_power: TransactingPower,
@@ -1180,12 +1173,12 @@ class PREApplicationDeployer(BaseContractDeployer):
                deployment_mode=FULL,
                ignore_deployed: bool = False,
                progress=None,
-               emitter=None):
+               emitter=None,
+               **overrides):
 
         constructor_args = (
             self.threshold_staking_interface,
-            self.min_authorization,
-            self.min_seconds
+            *self.economics.pre_application_deployment_parameters
         )
 
         contract, receipt = self.blockchain.deploy_contract(
@@ -1194,7 +1187,8 @@ class PREApplicationDeployer(BaseContractDeployer):
             self.contract_name,
             *constructor_args,
             gas_limit=gas_limit,
-            confirmations=confirmations
+            confirmations=confirmations,
+            # **overrides  # TODO: Support CLI deployment params
         )
         self._contract = contract
         self.deployment_receipts = dict(zip(self.deployment_steps, (receipt, )))

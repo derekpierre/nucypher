@@ -33,5 +33,5 @@ def prepare_staker(origin_tpower, staking_agent, token_agent, token_economics, u
                                            lock_periods=lock_periods,
                                            transacting_power=ursula_tpower,
                                            staker_address=ursula)
-    _txhash = staking_agent.bond_worker(transacting_power=ursula_tpower, worker_address=ursula)
+    _txhash = staking_agent.bond_worker(transacting_power=ursula_tpower, operator_address=ursula)
     _txhash = staking_agent.set_restaking(transacting_power=ursula_tpower, value=False)

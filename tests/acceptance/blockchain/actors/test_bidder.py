@@ -222,5 +222,5 @@ def test_claim(testerchain, agency, application_economics, test_registry):
     assert locked_tokens <= application_economics.maximum_allowed_locked
 
     # Confirm the stake is unbonded
-    worker_address = staking_agent.get_worker_from_staker(staker_address=bidder.checksum_address)
-    assert worker_address == NULL_ADDRESS
+    operator_address = staking_agent.get_worker_from_staker(staker_address=bidder.checksum_address)
+    assert operator_address == NULL_ADDRESS

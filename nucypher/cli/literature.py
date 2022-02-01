@@ -58,7 +58,7 @@ By agreeing to stake {tokens} ({nunits} NuNits):
 
 - Staked tokens will be locked for the stake duration.
 
-- You are obligated to maintain a networked and available Ursula-Worker node
+- You are obligated to maintain a networked and available Ursula-Operator node
   bonded to the staker address {staker_address} for the duration
   of the stake(s) ({lock_periods} periods).
 
@@ -96,7 +96,7 @@ rewards for the first period after the increase (GitHub Issue: https://github.co
 
 The workaround to increase stake size without reduced staking rewards is the following:
 1. Create a new sub-stake with the same duration as the current sub-stake
-2. Wait until there has been a Worker node commitment made in the period after the sub-stake was created
+2. Wait until there has been a Operator node commitment made in the period after the sub-stake was created
 3. Once there has been a commitment made in the period after the sub-stake was created, merge the sub-stakes at any time afterwards
 
 For example,
@@ -255,19 +255,19 @@ It is *highly recommended* to use a different accounts for staker and worker rol
 
 Continue using the same account for worker and staker?"""
 
-SUCCESSFUL_WORKER_BONDING = "\nWorker {worker_address} successfully bonded to staker {staking_address}"
+SUCCESSFUL_WORKER_BONDING = "\nOperator {operator_address} successfully bonded to staker {staking_address}"
 
 BONDING_DETAILS = "Bonded at period #{current_period} ({bonded_date})"
 
 BONDING_RELEASE_INFO = "This worker can be replaced or detached after period #{release_period} ({release_date})"
 
-SUCCESSFUL_DETACH_WORKER = "Successfully detached worker {worker_address} from staker {staking_address}"
+SUCCESSFUL_DETACH_WORKER = "Successfully detached worker {operator_address} from staker {staking_address}"
 
 DETACH_DETAILS = "Detached at period #{current_period} ({bonded_date})"
 
 
 #
-# Worker Rate
+# Operator Rate
 #
 
 PROMPT_STAKER_MIN_POLICY_RATE = "Enter new value (in GWEI) so the minimum fee rate falls within global fee range"
@@ -306,10 +306,10 @@ CONFIRM_MERGE_DISCLAIMER = """
 NOTE: Due to a known issue with the StakingEscrow contract, using the merge operation may lead to reduced staking
 rewards for the first period after the merge (GitHub Issue: https://github.com/nucypher/nucypher/issues/2691).
 
-Before merging a sub-stake, ensure that there has been a Worker node commitment that occurred in the period after the
+Before merging a sub-stake, ensure that there has been a Operator node commitment that occurred in the period after the
 sub-stake was created. For example,
 - If you created a sub-stake in period 10
-- Wait until there has been a Worker node commitment made in the period after the sub-stake was created (i.e. in period 11)
+- Wait until there has been a Operator node commitment made in the period after the sub-stake was created (i.e. in period 11)
 - Merge the sub-stake in period 11 after the commitment, or any time afterwards
 
 Are you sure you want to merge now instead of waiting?
@@ -420,7 +420,7 @@ DEFAULT_TO_LONE_CONFIG_FILE = "Defaulting to {config_class} configuration file: 
 #
 
 PASSWORD_COLLECTION_NOTICE = f"""
-Please provide a password to lock Worker keys.
+Please provide a password to lock Operator keys.
 Do not forget this password, and ideally store it using a password manager.
 """
 
@@ -695,7 +695,7 @@ See the official NuCypher documentation for a comprehensive guide on next steps!
 
 As a first step, you need to bond a worker to your stake by running:
 
-  nucypher stake bond-worker --worker-address <WORKER ADDRESS>
+  nucypher stake bond-worker --operator-address <WORKER ADDRESS>
 
 """
 

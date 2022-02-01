@@ -18,27 +18,23 @@ along with nucypher.  If not, see <https://www.gnu.org/licenses/>.
 
 import json
 import time
-from datetime import datetime
 from decimal import Decimal
 from typing import Callable, Union
 from typing import Dict, Iterable, List, Optional, Tuple
 
 import maya
-from constant_sorrow.constants import FULL, WORKER_NOT_RUNNING
+from constant_sorrow.constants import FULL
 from eth_tester.exceptions import TransactionFailed as TestTransactionFailed
 from eth_typing import ChecksumAddress
 from eth_utils import to_canonical_address
 from hexbytes import HexBytes
-from nucypher_core import HRAC
 from web3 import Web3
 from web3.exceptions import ValidationError
 from web3.types import TxReceipt
 
-from nucypher.acumen.nicknames import Nickname
 from nucypher.blockchain.economics import (
-    BaseEconomics,
+    Economics,
     EconomicsFactory,
-    StandardTokenEconomics
 )
 from nucypher.blockchain.eth.agents import (
     AdjudicatorAgent,
@@ -89,8 +85,7 @@ from nucypher.blockchain.eth.token import (
     TToken,
     Stake,
     StakeList,
-    ClassicPREWorkTracker,
-    SimplePREAppWorkTracker,
+    WorkTracker,
     validate_prolong,
     validate_increase,
     validate_divide,
@@ -105,7 +100,6 @@ from nucypher.characters.banners import STAKEHOLDER_BANNER
 from nucypher.config.constants import DEFAULT_CONFIG_ROOT
 from nucypher.control.emitters import StdoutEmitter
 from nucypher.crypto.powers import TransactingPower
-from nucypher.policy.policies import Policy
 from nucypher.types import NuNits, Period
 from nucypher.utilities.logging import Logger
 
@@ -124,7 +118,7 @@ class BaseActor:
                  registry: BaseContractRegistry,
                  transacting_power: Optional[TransactingPower] = None,
                  checksum_address: Optional[ChecksumAddress] = None,
-                 economics: Optional[BaseEconomics] = None):
+                 economics: Optional[Economics] = None):
 
         if not (bool(checksum_address) ^ bool(transacting_power)):
             error = f'Pass transacting power or checksum address, got {checksum_address} and {transacting_power}.'
@@ -142,7 +136,7 @@ class BaseActor:
             else:
                 self.checksum_address = checksum_address
 
-        self.economics = economics or StandardTokenEconomics()
+        self.economics = economics or Economics()
         self.transacting_power = transacting_power
         self.registry = registry
         self.network = domain
@@ -176,7 +170,14 @@ class NucypherTokenActor(BaseActor):
 
     def __init__(self, registry: BaseContractRegistry, **kwargs):
         super().__init__(registry=registry, **kwargs)
-        self.token_agent = ContractAgency.get_agent(NucypherTokenAgent, registry=self.registry)
+        self.__token_agent = None
+
+    @property
+    def token_agent(self):
+        if self.__token_agent:
+            return self.__token_agent
+        self.__token_agent = ContractAgency.get_agent(NucypherTokenAgent, registry=self.registry)
+        return self.__token_agent
 
     @property
     def token_balance(self) -> NU:
@@ -184,18 +185,6 @@ class NucypherTokenActor(BaseActor):
         balance = int(self.token_agent.get_balance(address=self.checksum_address))
         nu_balance = NU(balance, 'NuNit')
         return nu_balance
-
-class ThresholdTokenActor(BaseActor):
-
-    """
-    Actor to interface with the ThresholdToken contract
-    """
-
-    token_class = TToken
-    token_unit = 'TuNit'
-
-    def __init__(self, registry: BaseContractRegistry, **kwargs):
-        super().__init__(registry=registry, **kwargs)
 
 
 class ContractAdministrator(BaseActor):
@@ -518,7 +507,7 @@ class Staker(NucypherTokenActor):
         super().__init__(*args, **kwargs)
         self.log = Logger("staker")
         self.is_me = bool(self.transacting_power)
-        self._worker_address = None
+        self._operator_address = None
 
         # Blockchain
         self.policy_agent = ContractAgency.get_agent(PolicyManagerAgent, registry=self.registry)
@@ -533,11 +522,11 @@ class Staker(NucypherTokenActor):
 
     def to_dict(self) -> dict:
         stake_info = [stake.to_stake_info() for stake in self.stakes]
-        worker_address = self.worker_address or NULL_ADDRESS
+        operator_address = self.operator_address or NULL_ADDRESS
         staker_funds = {'ETH': int(self.eth_balance), 'NU': int(self.token_balance)}
         staker_payload = {'staker': self.checksum_address,
                           'balances': staker_funds,
-                          'worker': worker_address,
+                          'worker': operator_address,
                           'stakes': stake_info}
         return staker_payload
 
@@ -963,31 +952,31 @@ class Staker(NucypherTokenActor):
         return mintable_periods
 
     #
-    # Bonding with Worker
+    # Bonding with Operator
     #
     @only_me
     @save_receipt
     @validate_checksum_address
-    def bond_worker(self, worker_address: ChecksumAddress) -> TxReceipt:
+    def bond_worker(self, operator_address: ChecksumAddress) -> TxReceipt:
         receipt = self.staking_agent.bond_worker(transacting_power=self.transacting_power,
-                                                 worker_address=worker_address)
-        self._worker_address = worker_address
+                                                 operator_address=operator_address)
+        self._operator_address = operator_address
         return receipt
 
     @property
-    def worker_address(self) -> str:
-        if not self._worker_address:
+    def operator_address(self) -> str:
+        if not self._operator_address:
             # TODO: This is broken for StakeHolder with different stakers - See #1358
-            worker_address = self.staking_agent.get_worker_from_staker(staker_address=self.checksum_address)
-            self._worker_address = worker_address
+            operator_address = self.staking_agent.get_worker_from_staker(staker_address=self.checksum_address)
+            self._operator_address = operator_address
 
-        return self._worker_address
+        return self._operator_address
 
     @only_me
     @save_receipt
     def unbond_worker(self) -> TxReceipt:
         receipt = self.staking_agent.release_worker(transacting_power=self.transacting_power)
-        self._worker_address = NULL_ADDRESS
+        self._operator_address = NULL_ADDRESS
         return receipt
 
     #
@@ -1068,227 +1057,32 @@ class Staker(NucypherTokenActor):
         return min_fee
 
 
-class Worker(NucypherTokenActor):
-    """
-    Ursula baseclass for blockchain operations, practically carrying a pickaxe.
-    """
+class Operator(BaseActor):
 
     READY_TIMEOUT = None  # (None or 0) == indefinite
     READY_POLL_RATE = 10
-    READY_CLI_FEEDBACK_RATE = 60  # provide feedback to CLI every 60s
 
-    class WorkerError(NucypherTokenActor.ActorError):
+    class OperatorError(BaseActor.ActorError):
         pass
-
-    class UnbondedWorker(WorkerError):
-        """Raised when the Worker is not bonded to a Staker in the StakingEscrow contract."""
-        crash_right_now = True
 
     def __init__(self,
                  is_me: bool,
-                 work_tracker: ClassicPREWorkTracker = None,
-                 worker_address: str = None,
+                 work_tracker: WorkTracker = None,
+                 operator_address: ChecksumAddress = None,
                  *args, **kwargs):
 
         super().__init__(*args, **kwargs)
         self.log = Logger("worker")
-
         self.is_me = is_me
-
-        self.__worker_address = worker_address
-
-        # Agency
-        self.staking_agent = ContractAgency.get_agent(StakingEscrowAgent,
-                                                      registry=self.registry)  # type: StakingEscrowAgent
-
-        # Someday, when we have Workers for tasks other than PRE, this might instead be composed on Ursula.
-        self.policy_agent = ContractAgency.get_agent(PolicyManagerAgent,
-                                                     registry=self.registry)  # type: PolicyManagerAgent
-
-        # Stakes
-        self.__start_time = WORKER_NOT_RUNNING
-        self.__uptime_period = WORKER_NOT_RUNNING
-
+        self.__operator_address = operator_address
+        self.__staking_provider_address = None  # set by block_until_ready
         if is_me:
-            self.stakes = StakeList(registry=self.registry, checksum_address=self.checksum_address)
-            self.stakes.checksum_address = self.checksum_address
-            self.stakes.refresh()
-            self.work_tracker = work_tracker or ClassicPREWorkTracker(worker=self, stakes=self.stakes)
-
-    def block_until_ready(self, poll_rate: int = None, timeout: int = None, feedback_rate: int = None):
-        """
-        Polls the staking_agent and blocks until the staking address is not
-        a null address for the given worker_address. Once the worker is bonded, it returns the staker address.
-        """
-        if not self.__worker_address:
-            raise RuntimeError("No worker address available")
-
-        timeout = timeout or self.READY_TIMEOUT
-        poll_rate = poll_rate or self.READY_POLL_RATE
-        feedback_rate = feedback_rate or self.READY_CLI_FEEDBACK_RATE
-        staking_agent = ContractAgency.get_agent(StakingEscrowAgent, registry=self.registry)
-        client = staking_agent.blockchain.client
-        start = maya.now()
-        last_provided_feedback = start
-
-        emitter = StdoutEmitter()
-
-        funded, bonded = False, False
-        while True:
-
-            # Read
-            staking_address = staking_agent.get_staker_from_worker(self.__worker_address)
-            ether_balance = client.get_balance(self.__worker_address)
-
-            # Bonding
-            if (not bonded) and (staking_address != NULL_ADDRESS):
-                bonded = True
-                emitter.message(f"✓ Worker is bonded to {staking_address}", color='green')
-
-            # Balance
-            if ether_balance and (not funded):
-                funded, balance = True, Web3.fromWei(ether_balance, 'ether')
-                emitter.message(f"✓ Worker is funded with {balance} ETH", color='green')
-
-            # Success and Escape
-            if staking_address != NULL_ADDRESS and ether_balance:
-                self.checksum_address = staking_address
-                # TODO: #1823 - Workaround for new nickname every restart
-                self.nickname = Nickname.from_seed(self.checksum_address)
-                break
-
-            # Provide periodic feedback to the user
-            if not bonded or not funded:
-                now = maya.now()
-                delta = now - last_provided_feedback
-                if delta.total_seconds() >= feedback_rate:
-                    if not bonded and not funded:
-                        waiting_for = "bonding and funding"
-                    else:
-                        waiting_for = "bonding" if not bonded else "funding"
-                    message = f"ⓘ  Worker startup is paused. Waiting for {waiting_for} ..."
-                    emitter.message(message, color='blue', bold=True)
-                    last_provided_feedback = now
-
-            # Crash on Timeout
-            if timeout:
-                now = maya.now()
-                delta = now - start
-                if delta.total_seconds() >= timeout:
-                    if staking_address == NULL_ADDRESS:
-                        raise self.UnbondedWorker(
-                            f"Worker {self.__worker_address} not bonded after waiting {timeout} seconds.")
-                    elif not ether_balance:
-                        raise RuntimeError(
-                            f"Worker {self.__worker_address} has no ETH after waiting {timeout} seconds.")
-
-            # Increment
-            time.sleep(poll_rate)
+            self.application_agent = ContractAgency.get_agent(PREApplicationAgent, registry=self.registry)
+            self.work_tracker = work_tracker or WorkTracker(worker=self)
 
     @property
-    def eth_balance(self) -> Decimal:
-        """Return this worker's current ETH balance"""
-        blockchain = BlockchainInterfaceFactory.get_interface()  # TODO: EthAgent #1509
-        balance = blockchain.client.get_balance(self.__worker_address)
-        return blockchain.client.w3.fromWei(balance, 'ether')
-
-    @property
-    def token_balance(self) -> NU:
-        """
-        Return this worker's current token balance.
-        Note: Workers typically do not control any tokens.
-        """
-        balance = int(self.token_agent.get_balance(address=self.__worker_address))
-        nu_balance = NU(balance, 'NuNit')
-        return nu_balance
-
-    @property
-    def last_committed_period(self) -> int:
-        period = self.staking_agent.get_last_committed_period(staker_address=self.checksum_address)
-        return period
-
-    @only_me
-    @save_receipt  # saves txhash instead of receipt if `fire_and_forget` is True
-    def commit_to_next_period(self, fire_and_forget: bool = True) -> Union[TxReceipt, HexBytes]:
-        """For each period that the worker makes a commitment, the staker is rewarded"""
-        txhash_or_receipt = self.staking_agent.commit_to_next_period(transacting_power=self.transacting_power,
-                                                                     fire_and_forget=fire_and_forget)
-        return txhash_or_receipt
-
-    @property
-    def missing_commitments(self) -> int:
-        staker_address = self.checksum_address
-        missing = self.staking_agent.get_missing_commitments(checksum_address=staker_address)
-        return missing
-
-<<<<<<< HEAD
-    def verify_policy_payment(self, hrac: HRAC) -> None:
-        arrangements = self.policy_agent.fetch_policy_arrangements(policy_id=bytes(hrac))
-        members = set()
-        for arrangement in arrangements:
-            members.add(arrangement.node)
-            if self.checksum_address == arrangement.node:
-                return
-        else:
-            if not members:
-                raise Policy.Unknown(f'{hrac} is not a published policy.')
-            raise Policy.Unpaid(f"{hrac} is unpaid.")
-
-    def verify_active_policy(self, hrac: HRAC) -> None:
-        policy = self.policy_agent.fetch_policy(policy_id=bytes(hrac))
-        if policy.disabled:
-            raise Policy.Inactive(f'{hrac} is a disabled policy.')
-        expired = datetime.utcnow() >= datetime.utcfromtimestamp(policy.end_timestamp)
-        if expired:
-            raise Policy.Expired(f'{hrac} is an expired policy.')
-
-    def get_work_is_needed_check(self):
-
-        # we have stakes that have active substakes
-        def func(self):
-            self.stakes.checksum_address = self.checksum_address
-            self.stakes.refresh()
-            if not self.stakes.has_active_substakes:
-                return False
-
-        return func
-
-
-class ThresholdWorker(BaseActor):
-
-    READY_TIMEOUT = None  # (None or 0) == indefinite
-    READY_POLL_RATE = 10
-    READY_CLI_FEEDBACK_RATE = 60  # provide feedback to CLI every 60s
-
-    class WorkerError(ThresholdTokenActor.ActorError):
-        pass
-
-    @property
-    def token_balance(self):
-        return 0
-
-    def __init__(self,
-                 is_me: bool,
-                 work_tracker: ClassicPREWorkTracker = None,
-                 worker_address: str = None,
-                 *args, **kwargs):
-
-        super().__init__(*args, **kwargs)
-        self.log = Logger("worker")
-
-        self.is_me = is_me
-
-        self.__worker_address = worker_address
-
-        # PRE Application
-        self.pre_application_agent = ContractAgency.get_agent(PREApplicationAgent, registry=self.registry)
-
-        if is_me:
-            self.work_tracker = work_tracker or SimplePREAppWorkTracker(worker=self)
-
-    @property
-    def worker_address(self):
-        return self.__worker_address
+    def operator_address(self):
+        return self.__operator_address
 
     @property
     def staking_provider_address(self):
@@ -1297,37 +1091,40 @@ class ThresholdWorker(BaseActor):
         return self.__staking_provider_address
 
     def get_staking_provider_address(self):
-        self.__staking_provider_address = self.pre_application_agent.get_staking_provider_from_operator(self.worker_address)
+        self.__staking_provider_address = self.application_agent.get_staking_provider_from_operator(self.operator_address)
         return self.__staking_provider_address
 
     @property
     def is_confirmed(self):
-        return self.pre_application_agent.is_operator_confirmed(self.worker_address)
+        return self.application_agent.is_operator_confirmed(self.operator_address)
 
     def confirm_operator_address(self, fire_and_forget: bool = True) -> Union[TxReceipt, HexBytes]:
-        txhash_or_receipt =  self.pre_application_agent.confirm_operator_address(self.transacting_power, fire_and_forget=fire_and_forget)
+        txhash_or_receipt = self.application_agent.confirm_operator_address(self.transacting_power, fire_and_forget=fire_and_forget)
         return txhash_or_receipt
 
-    def block_until_ready(self, poll_rate: int = None, timeout: int = None, feedback_rate: int = None):
-
-        client = self.pre_application_agent.blockchain.client
+    def block_until_ready(self, poll_rate: int = None, timeout: int = None):
         emitter = StdoutEmitter()
-
+        client = self.application_agent.blockchain.client
         poll_rate = poll_rate or self.READY_POLL_RATE
-
-        funded, bonded = False, False
+        timeout = timeout or self.READY_TIMEOUT
+        start, funded, bonded = maya.now(), False, False
         while not (funded and bonded):
 
-            ether_balance = client.get_balance(self.worker_address)
+            if timeout and ((maya.now() - start).total_seconds() > timeout):
+                message = f"x Operator was not qualified after {timeout} seconds"
+                emitter.message(message, color='red')
+                raise self.ActorError(message)
+
+            ether_balance = client.get_balance(self.operator_address)
             if ether_balance and (not funded):
                 funded, balance = True, Web3.fromWei(ether_balance, 'ether')
-                emitter.message(f"✓ Worker is funded with {balance} ETH", color='green')
+                emitter.message(f"✓ Operator is funded with {balance} ETH", color='green')
 
             if (not bonded) and (self.get_staking_provider_address() != NULL_ADDRESS):
                 bonded = True
-                emitter.message(f"✓ Operator {self.worker_address} is bonded to Staking Provider {self.staking_provider_address}", color='green')
+                emitter.message(f"✓ Operator {self.operator_address} is bonded to staking provider {self.staking_provider_address}", color='green')
             else:
-                emitter.message(f"✓ Operator {self.worker_address } is not bonded to a staking provider.", color='yellow')
+                emitter.message(f"! Operator {self.operator_address } is not bonded to a staking provider", color='yellow')
 
             time.sleep(poll_rate)
 
@@ -1338,27 +1135,19 @@ class ThresholdWorker(BaseActor):
         return func
 
 
-# TODO: This class can easily be removed with the introduction of Payments.
 class BlockchainPolicyAuthor(NucypherTokenActor):
     """Alice base class for blockchain operations, mocking up new policies!"""
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.staking_agent = ContractAgency.get_agent(StakingEscrowAgent, registry=self.registry)
-        self.policy_agent = ContractAgency.get_agent(PolicyManagerAgent, registry=self.registry)
-        self.economics = EconomicsFactory.get_economics(registry=self.registry)
+        self.application_agent = ContractAgency.get_agent(PREApplicationAgent, registry=self.registry)
 
     def create_policy(self, *args, **kwargs):
-        """
-        Hence the name, a BlockchainPolicyAuthor can create
-        a BlockchainPolicy with themself as the author.
-        """
+        """Hence the name, a BlockchainPolicyAuthor can create a BlockchainPolicy with themself as the author."""
         from nucypher.policy.policies import BlockchainPolicy
         blockchain_policy = BlockchainPolicy(publisher=self, *args, **kwargs)
         return blockchain_policy
 
-=======
->>>>>>> f400a6409... Removes BlockchainPolicyAuthor.
 
 class Investigator(NucypherTokenActor):
     """
@@ -1560,7 +1349,7 @@ class Bidder(NucypherTokenActor):
 
     def _get_max_bonus_bid_from_max_stake(self) -> int:
         """Returns maximum allowed bid calculated from maximum allowed locked tokens"""
-        max_bonus_tokens = self.economics.maximum_allowed_locked - self.economics.minimum_allowed_locked
+        max_bonus_tokens = self.economics.maximum_allowed_locked - self.economics.min_authorization
         bonus_eth_supply = sum(
             self._all_bonus_bidders.values()) if self._all_bonus_bidders else self.worklock_agent.get_bonus_eth_supply()
         bonus_worklock_supply = self.worklock_agent.get_bonus_lot_value()
@@ -1603,7 +1392,7 @@ class Bidder(NucypherTokenActor):
 
         bonus_eth_supply = sum(self._all_bonus_bidders.values())
         bonus_worklock_supply = self.worklock_agent.get_bonus_lot_value()
-        max_bonus_tokens = self.economics.maximum_allowed_locked - self.economics.minimum_allowed_locked
+        max_bonus_tokens = self.economics.maximum_allowed_locked - self.economics.min_authorization
         if (min_whale_bonus_bid * bonus_worklock_supply) // bonus_eth_supply <= max_bonus_tokens:
             raise self.WhaleError(f"At least one of bidders {whales} has allowable bid")
 

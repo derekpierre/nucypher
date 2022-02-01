@@ -14,17 +14,15 @@
  You should have received a copy of the GNU Affero General Public License
  along with nucypher.  If not, see <https://www.gnu.org/licenses/>.
 """
-
-
+import pytest
 import pytest_twisted
 from twisted.internet import threads
 from twisted.internet.task import Clock
 from web3.middleware.simulate_unmined_transaction import unmined_receipt_simulator_middleware
 
-from nucypher.blockchain.eth.actors import Worker
-from nucypher.blockchain.eth.token import NU, ClassicPREWorkTracker
+from nucypher.blockchain.eth.actors import Operator
+from nucypher.blockchain.eth.token import NU, WorkTracker
 from nucypher.utilities.logging import Logger
-from tests.constants import INSECURE_DEVELOPMENT_PASSWORD
 from tests.utils.ursula import make_decentralized_ursulas, start_pytest_ursula_services
 
 logger = Logger("test-worker")
@@ -49,22 +47,22 @@ def test_worker_auto_commitments(mocker,
                             lock_periods=int(application_economics.min_operator_seconds))
 
     # Get an unused address and create a new worker
-    worker_address = testerchain.unassigned_accounts[-1]
+    operator_address = testerchain.unassigned_accounts[-1]
 
     # Control time
     clock = Clock()
-    ClassicPREWorkTracker.CLOCK = clock
+    WorkTracker.CLOCK = clock
 
-    # Bond the Worker and Staker
-    staker.bond_worker(worker_address=worker_address)
+    # Bond the Operator and Staker
+    staker.bond_worker(operator_address=operator_address)
 
-    commit_spy = mocker.spy(Worker, 'commit_to_next_period')
-    replacement_spy = mocker.spy(ClassicPREWorkTracker, '_ClassicPREWorkTracker__fire_replacement_commitment')
+    commit_spy = mocker.spy(Operator, 'commit_to_next_period')
+    replacement_spy = mocker.spy(WorkTracker, '_WorkTracker__fire_replacement_commitment')
 
-    # Make the Worker
+    # Make the Operator
     ursula = make_decentralized_ursulas(ursula_config=ursula_decentralized_test_config,
                                         stakers_addresses=[staker.checksum_address],
-                                        workers_addresses=[worker_address],
+                                        workers_addresses=[operator_address],
                                         registry=test_registry).pop()
 
     ursula.run(preflight=False,
@@ -74,16 +72,16 @@ def test_worker_auto_commitments(mocker,
                eager=True,
                block_until_ready=False)  # "start" services
 
-    initial_period = staker.staking_agent.get_current_period()
+    initial_period = staker.application_agent.get_current_period()
 
     def start():
-        log("Starting Worker for auto-commitment simulation")
+        log("Starting Operator for auto-commitment simulation")
         start_pytest_ursula_services(ursula=ursula)
 
     def advance_one_period(_):
         log('Advancing one period')
         testerchain.time_travel(periods=1)
-        clock.advance(ClassicPREWorkTracker.INTERVAL_CEIL + 1)
+        clock.advance(WorkTracker.INTERVAL_CEIL + 1)
 
     def check_pending_commitments(number_of_commitments):
         def _check_pending_commitments(_):
@@ -100,13 +98,13 @@ def test_worker_auto_commitments(mocker,
         clock.advance(ursula.work_tracker._tracking_task.interval + 1)
 
     def advance_until_replacement_indicated(_):
-        last_committed_period = staker.staking_agent.get_last_committed_period(staker_address=staker.checksum_address)
+        last_committed_period = staker.application_agent.get_last_committed_period(staker_address=staker.checksum_address)
         log("Advancing until replacement is indicated")
         testerchain.time_travel(periods=1)
-        clock.advance(ClassicPREWorkTracker.INTERVAL_CEIL + 1)
-        mocker.patch.object(ClassicPREWorkTracker, 'max_confirmation_time', return_value=1.0)
+        clock.advance(WorkTracker.INTERVAL_CEIL + 1)
+        mocker.patch.object(WorkTracker, 'max_confirmation_time', return_value=1.0)
         mock_last_committed_period = mocker.PropertyMock(return_value=last_committed_period)
-        mocker.patch.object(Worker, 'last_committed_period', new_callable=mock_last_committed_period)
+        mocker.patch.object(Operator, 'last_committed_period', new_callable=mock_last_committed_period)
         clock.advance(ursula.work_tracker.max_confirmation_time() + 1)
 
     def verify_unmined_commitment(_):
@@ -117,7 +115,7 @@ def test_worker_auto_commitments(mocker,
         # prevent them from being mined.
         #
         # assert len(ursula.work_tracker.pending) == 1
-        current_period = staker.staking_agent.get_current_period()
+        current_period = staker.application_agent.get_current_period()
         assert commit_spy.call_count == current_period - initial_period + 1
 
     def verify_replacement_commitment(_):
@@ -126,8 +124,8 @@ def test_worker_auto_commitments(mocker,
 
     def verify_confirmed(_):
         # Verify that periods were committed on-chain automatically
-        last_committed_period = staker.staking_agent.get_last_committed_period(staker_address=staker.checksum_address)
-        current_period = staker.staking_agent.get_current_period()
+        last_committed_period = staker.application_agent.get_last_committed_period(staker_address=staker.checksum_address)
+        current_period = staker.application_agent.get_current_period()
 
         expected_commitments = current_period - initial_period + 1
         log(f'Verifying worker made {expected_commitments} commitments so far')

@@ -19,12 +19,13 @@ from typing import List, NamedTuple, Optional, Sequence
 
 from constant_sorrow.constants import NO_BLOCKCHAIN_CONNECTION, NO_CONTROL_PROTOCOL
 from eth_typing import ChecksumAddress
+from eth_utils import to_checksum_address
 from flask import request, Response
 
 from nucypher_core import TreasureMap, RetrievalKit
 from nucypher_core.umbral import PublicKey
 
-from nucypher.blockchain.eth.agents import ContractAgency, StakingEscrowAgent
+from nucypher.blockchain.eth.agents import ContractAgency, StakingEscrowAgent, PREApplicationAgent
 from nucypher.blockchain.eth.interfaces import BlockchainInterfaceFactory
 from nucypher.blockchain.eth.registry import BaseContractRegistry, InMemoryContractRegistry
 from nucypher.characters.lawful import Ursula
@@ -35,7 +36,7 @@ from nucypher.network.retrieval import RetrievalClient
 from nucypher.policy.kits import RetrievalResult
 from nucypher.policy.reservoir import (
     make_federated_staker_reservoir,
-    make_decentralized_staker_reservoir,
+    make_decentralized_staking_provider_reservoir,
     PrefetchStrategy
 )
 from nucypher.utilities.concurrency import WorkerPool
@@ -94,7 +95,7 @@ the Pipe for nucypher network operations
                 BlockchainInterfaceFactory.initialize_interface(provider_uri=provider_uri)
 
             self.registry = registry or InMemoryContractRegistry.from_latest_publication(network=domain)
-            self.staking_agent = ContractAgency.get_agent(StakingEscrowAgent, registry=self.registry)
+            self.application_agent = ContractAgency.get_agent(PREApplicationAgent, registry=self.registry)
         else:
             self.registry = NO_BLOCKCHAIN_CONNECTION.bool_value(False)
             node_class.set_federated_mode(federated_only)
@@ -113,16 +114,16 @@ the Pipe for nucypher network operations
 
     def get_ursulas(self,
                     quantity: int,
-                    duration_periods: int = None,  # optional for federated mode
                     exclude_ursulas: Optional[Sequence[ChecksumAddress]] = None,
                     include_ursulas: Optional[Sequence[ChecksumAddress]] = None) -> List[UrsulaInfo]:
-        reservoir = self._make_staker_reservoir(quantity, duration_periods, exclude_ursulas, include_ursulas)
+        reservoir = self._make_staker_reservoir(quantity, exclude_ursulas, include_ursulas)
         value_factory = PrefetchStrategy(reservoir, quantity)
 
         def get_ursula_info(ursula_address) -> Porter.UrsulaInfo:
-            if ursula_address not in self.known_nodes:
+            if to_checksum_address(ursula_address) not in self.known_nodes:
                 raise ValueError(f"{ursula_address} is not known")
 
+            ursula_address = to_checksum_address(ursula_address)
             ursula = self.known_nodes[ursula_address]
             try:
                 # verify node is valid
@@ -166,7 +167,6 @@ the Pipe for nucypher network operations
 
     def _make_staker_reservoir(self,
                                quantity: int,
-                               duration_periods: int = None,  # optional for federated mode
                                exclude_ursulas: Optional[Sequence[ChecksumAddress]] = None,
                                include_ursulas: Optional[Sequence[ChecksumAddress]] = None):
         if self.federated_only:
@@ -179,12 +179,10 @@ the Pipe for nucypher network operations
                                                    exclude_addresses=exclude_ursulas,
                                                    include_addresses=include_ursulas)
         else:
-            if not duration_periods:
-                raise ValueError("Duration periods must be provided in decentralized mode")
-            return make_decentralized_staker_reservoir(staking_agent=self.staking_agent,
-                                                       duration_periods=duration_periods,
-                                                       exclude_addresses=exclude_ursulas,
-                                                       include_addresses=include_ursulas)
+            return make_decentralized_staking_provider_reservoir(application_agent=self.application_agent,
+                                                                 exclude_addresses=exclude_ursulas,
+                                                                 include_addresses=include_ursulas,
+                                                                 pagination_size=self.application_agent.get_staking_providers_population())  # TODO: embed this as default
 
     def make_cli_controller(self, crash_on_error: bool = False):
         controller = PorterCLIController(app_name=self.APP_NAME,

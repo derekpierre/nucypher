@@ -40,7 +40,7 @@ from nucypher.cli.types import WORKER_IP
 from nucypher.config.base import CharacterConfiguration
 from nucypher.config.characters import StakeHolderConfiguration
 from nucypher.config.constants import DEFAULT_CONFIG_ROOT
-from nucypher.utilities.networking import InvalidWorkerIP, validate_worker_ip
+from nucypher.utilities.networking import InvalidOperatorIP, validate_worker_ip
 from nucypher.utilities.networking import determine_external_ip_address, UnknownIPAddress
 
 
@@ -173,7 +173,7 @@ def perform_startup_ip_check(emitter: StdoutEmitter, ursula: Ursula, force: bool
     rest_host = ursula.rest_interface.host
     try:
         validate_worker_ip(worker_ip=rest_host)
-    except InvalidWorkerIP:
+    except InvalidOperatorIP:
         message = f'{rest_host} is not a valid or permitted worker IP address.  Set the correct external IP then try again\n' \
                   f'automatic configuration -> nucypher ursula config ip-address\n' \
                   f'manual configuration    -> nucypher ursula config --rest-host <IP ADDRESS>'

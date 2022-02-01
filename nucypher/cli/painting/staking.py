@@ -73,7 +73,7 @@ def paint_stakes(emitter: StdoutEmitter,
 
     fees = staker.policy_agent.get_fee_amount(staker.checksum_address)
     pretty_fees = prettify_eth_amount(fees)
-    last_committed = staker.staking_agent.get_last_committed_period(staker.checksum_address)
+    last_committed = staker.application_agent.get_last_committed_period(staker.checksum_address)
     missing = staker.missing_commitments
     min_fee_rate = prettify_eth_amount(staker.min_fee_rate)
 
@@ -95,8 +95,8 @@ def paint_stakes(emitter: StdoutEmitter,
         snippet_with_line = network_snippet + '═'*(line_width-len(network_snippet)+1)
         emitter.echo(snippet_with_line, bold=True)
     emitter.echo(f"Staker {staker.checksum_address} ════", bold=True, color='red' if missing else 'green')
-    worker = staker.worker_address if staker.worker_address != NULL_ADDRESS else 'not bonded'
-    emitter.echo(f"Worker {worker} ════", color='red' if staker.worker_address == NULL_ADDRESS else None)
+    worker = staker.operator_address if staker.operator_address != NULL_ADDRESS else 'not bonded'
+    emitter.echo(f"Operator {worker} ════", color='red' if staker.operator_address == NULL_ADDRESS else None)
     if stakeholder and stakeholder.worker_data:
         worker_data = stakeholder.worker_data.get(staker.checksum_address)
         if worker_data:
@@ -231,7 +231,7 @@ def paint_staking_confirmation(emitter, staker, receipt):
     emitter.echo("\nStake initialization transaction was successful.", color='green')
     emitter.echo(f'\nTransaction details:')
     paint_receipt_summary(emitter=emitter, receipt=receipt, transaction_type="deposit stake")
-    emitter.echo(f'\n{STAKING_ESCROW_CONTRACT_NAME} address: {staker.staking_agent.contract_address}', color='blue')
+    emitter.echo(f'\n{STAKING_ESCROW_CONTRACT_NAME} address: {staker.application_agent.contract_address}', color='blue')
     emitter.echo(POST_STAKING_ADVICE, color='green')
 
 

@@ -32,7 +32,7 @@ def remove_inactive_substake(emitter,
                              force: bool
                              ) -> None:
     # Non-interactive: Consistency check to prevent the above agreement from going stale.
-    last_second_current_period = stakeholder.staker.staking_agent.get_current_period()
+    last_second_current_period = stakeholder.staker.application_agent.get_current_period()
     if action_period != last_second_current_period:
         emitter.echo(PERIOD_ADVANCED_WARNING, color='red')
         raise click.Abort

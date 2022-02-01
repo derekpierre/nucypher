@@ -73,7 +73,7 @@ class UrsulaConfigOptions:
 
     def __init__(self,
                  provider_uri: str,
-                 worker_address: str,
+                 operator_address: str,
                  federated_only: bool,
                  rest_host: str,
                  rest_port: int,
@@ -100,7 +100,7 @@ class UrsulaConfigOptions:
 
         self.provider_uri = provider_uri
         self.signer_uri = signer_uri
-        self.worker_address = worker_address
+        self.operator_address = operator_address
         self.federated_only = federated_only
         self.rest_host = rest_host
         self.rest_port = rest_port  # FIXME: not used in generate()
@@ -131,7 +131,7 @@ class UrsulaConfigOptions:
                 signer_uri=self.signer_uri,
                 gas_strategy=self.gas_strategy,
                 max_gas_price=self.max_gas_price,
-                checksum_address=self.worker_address,
+                checksum_address=self.operator_address,
                 federated_only=self.federated_only,
                 rest_host=self.rest_host,
                 rest_port=self.rest_port,
@@ -144,7 +144,7 @@ class UrsulaConfigOptions:
         else:
             if not config_file:
                 config_file = select_config_file(emitter=emitter,
-                                                 checksum_address=self.worker_address,
+                                                 checksum_address=self.operator_address,
                                                  config_class=UrsulaConfiguration)
             try:
                 return UrsulaConfiguration.from_configuration_file(
@@ -179,11 +179,11 @@ class UrsulaConfigOptions:
         if self.dev:
             raise RuntimeError('Persistent configurations cannot be created in development mode.')
 
-        worker_address = self.worker_address
-        if (not worker_address) and not self.federated_only:
-            if not worker_address:
+        operator_address = self.operator_address
+        if (not operator_address) and not self.federated_only:
+            if not operator_address:
                 prompt = "Select worker account"
-                worker_address = select_client_account(emitter=emitter,
+                operator_address = select_client_account(emitter=emitter,
                                                        prompt=prompt,
                                                        provider_uri=self.provider_uri,
                                                        signer_uri=self.signer_uri)
@@ -200,7 +200,7 @@ class UrsulaConfigOptions:
                                             db_filepath=self.db_filepath,
                                             domain=self.domain,
                                             federated_only=self.federated_only,
-                                            worker_address=worker_address,
+                                            operator_address=operator_address,
                                             registry_filepath=self.registry_filepath,
                                             provider_uri=self.provider_uri,
                                             signer_uri=self.signer_uri,
@@ -220,7 +220,7 @@ class UrsulaConfigOptions:
                        db_filepath=self.db_filepath,
                        domain=self.domain,
                        federated_only=self.federated_only,
-                       worker_address=self.worker_address,
+                       operator_address=self.operator_address,
                        registry_filepath=self.registry_filepath,
                        provider_uri=self.provider_uri,
                        signer_uri=self.signer_uri,
@@ -245,7 +245,7 @@ group_config_options = group_options(
     signer_uri=option_signer_uri,
     gas_strategy=option_gas_strategy,
     max_gas_price=option_max_gas_price,
-    worker_address=click.option('--worker-address', help="Run the worker-ursula with a specified address", type=EIP55_CHECKSUM_ADDRESS),
+    operator_address=click.option('--operator-address', help="Run the worker-ursula with a specified address", type=EIP55_CHECKSUM_ADDRESS),
     federated_only=option_federated_only,
     rest_host=click.option('--rest-host', help="The host IP address to run Ursula network services on", type=WORKER_IP),
     rest_port=click.option('--rest-port', help="The host port to run Ursula network services on", type=NETWORK_PORT),
@@ -281,7 +281,7 @@ class UrsulaCharacterOptions:
                                  not is_clef))
         __password = None
         if password_required:
-            __password = get_client_password(checksum_address=ursula_config.worker_address,
+            __password = get_client_password(checksum_address=ursula_config.operator_address,
                                              envvar=NUCYPHER_ENVVAR_WORKER_ETH_PASSWORD)
 
         try:
@@ -324,7 +324,7 @@ def ursula():
 @option_key_material
 def init(general_config, config_options, force, config_root, key_material):
     """Create a new Ursula node configuration."""
-    emitter = setup_emitter(general_config, config_options.worker_address)
+    emitter = setup_emitter(general_config, config_options.operator_address)
     _pre_launch_warnings(emitter, dev=None, force=force)
     if not config_root:
         config_root = general_config.config_root
@@ -348,7 +348,7 @@ def init(general_config, config_options, force, config_root, key_material):
 def recover(general_config, config_options):
     # TODO: Combine with work in PR #2682
     # TODO: Integrate regeneration of configuration files
-    emitter = setup_emitter(general_config, config_options.worker_address)
+    emitter = setup_emitter(general_config, config_options.operator_address)
     recover_keystore(emitter=emitter)
 
 
@@ -359,7 +359,7 @@ def recover(general_config, config_options):
 @group_general_config
 def destroy(general_config, config_options, config_file, force):
     """Delete Ursula node configuration."""
-    emitter = setup_emitter(general_config, config_options.worker_address)
+    emitter = setup_emitter(general_config, config_options.operator_address)
     _pre_launch_warnings(emitter, dev=config_options.dev, force=force)
     ursula_config = config_options.create_config(emitter, config_file)
     destroy_configuration(emitter, character_config=ursula_config, force=force)
@@ -371,7 +371,7 @@ def destroy(general_config, config_options, config_file, force):
 @group_general_config
 def forget(general_config, config_options, config_file):
     """Forget all known nodes."""
-    emitter = setup_emitter(general_config, config_options.worker_address)
+    emitter = setup_emitter(general_config, config_options.operator_address)
     _pre_launch_warnings(emitter, dev=config_options.dev, force=None)
     ursula_config = config_options.create_config(emitter, config_file)
     forget_nodes(emitter, configuration=ursula_config)
@@ -394,7 +394,7 @@ def run(general_config, character_options, config_file, interactive, dry_run, pr
         metrics_listen_address, metrics_prefix, metrics_interval, force, ip_checkup):
     """Run an "Ursula" node."""
 
-    worker_address = character_options.config_options.worker_address
+    operator_address = character_options.config_options.operator_address
     emitter = setup_emitter(general_config)
     dev_mode = character_options.config_options.dev
     lonely = character_options.config_options.lonely
@@ -440,7 +440,7 @@ def run(general_config, character_options, config_file, interactive, dry_run, pr
 @group_general_config
 def save_metadata(general_config, character_options, config_file):
     """Manually write node metadata to disk without running."""
-    emitter = setup_emitter(general_config, character_options.config_options.worker_address)
+    emitter = setup_emitter(general_config, character_options.config_options.operator_address)
     _pre_launch_warnings(emitter, dev=character_options.config_options.dev, force=None)
     _, URSULA = character_options.create_character(emitter, config_file, general_config.json_ipc, load_seednodes=False)
     metadata_path = URSULA.write_node_metadata(node=URSULA)
@@ -463,10 +463,10 @@ def config(general_config, config_options, config_file, force, action):
     ip-address - automatically detect and configure the external IP address.
 
     """
-    emitter = setup_emitter(general_config, config_options.worker_address)
+    emitter = setup_emitter(general_config, config_options.operator_address)
     if not config_file:
         config_file = select_config_file(emitter=emitter,
-                                         checksum_address=config_options.worker_address,
+                                         checksum_address=config_options.operator_address,
                                          config_class=UrsulaConfiguration)
     if action == 'ip-address':
         rest_host = collect_worker_ip_address(emitter=emitter, network=config_options.domain, force=force)

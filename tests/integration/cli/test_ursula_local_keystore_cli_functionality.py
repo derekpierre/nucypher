@@ -75,7 +75,7 @@ def test_ursula_init_with_local_keystore_signer(click_runner,
                  '--rest-host', MOCK_IP_ADDRESS,
                  '--rest-port', deploy_port,
 
-                 '--worker-address', worker_account.address,
+                 '--operator-address', worker_account.address,
                  '--config-root', str(custom_filepath.absolute()),
 
                  # The bit we are testing here

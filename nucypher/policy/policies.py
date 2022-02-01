@@ -31,7 +31,7 @@ from nucypher.policy.reservoir import (
     make_federated_staker_reservoir,
     MergedReservoir,
     PrefetchStrategy,
-    make_decentralized_staker_reservoir
+    make_decentralized_staking_provider_reservoir
 )
 from nucypher.policy.revocation import RevocationKit
 from nucypher.utilities.concurrency import WorkerPool
@@ -133,12 +133,14 @@ class Policy(ABC):
         def worker(address) -> 'Ursula':
             return self._ping_node(address, network_middleware)
 
-        worker_pool = WorkerPool(worker=worker,
-                                 value_factory=value_factory,
-                                 target_successes=self.shares,
-                                 timeout=timeout,
-                                 stagger_timeout=1,
-                                 threadpool_size=self.shares)
+        worker_pool = WorkerPool(
+            worker=worker,
+            value_factory=value_factory,
+            target_successes=self.shares,
+            timeout=timeout,
+            stagger_timeout=1,
+            threadpool_size=self.shares
+        )
         worker_pool.start()
         try:
             successes = worker_pool.block_until_target_successes()
@@ -209,23 +211,10 @@ class BlockchainPolicy(Policy):
 
     def _make_reservoir(self, handpicked_addresses: List[ChecksumAddress]):
         """Returns a reservoir of staking nodes to create a decentralized policy."""
-
-        # TODO: This is a shim to provide compatibility between SubscriptionManager and StakingEscrow sampling
-        # Handles the duration unit difference between PolicyManager (periods) and SubscriptionManager (seconds)
-        # this can be further abstracted away (into payments?) or removed when
-        # StakingEscrow periods are fully deprecated.
-        from nucypher.policy.payment import SubscriptionManagerPayment
-        duration = self.duration
-        if isinstance(self.publisher.payment_method, SubscriptionManagerPayment):
-            economics = self.publisher.economics
-            expiration = maya.MayaDT(self.expiration)
-            duration = calculate_period_duration(future_time=expiration, seconds_per_period=economics.seconds_per_period)
-            duration += 1
-
-        staker_reservoir = make_decentralized_staker_reservoir(staking_agent=self.publisher.staking_agent,
-                                                               duration_periods=duration,
-                                                               include_addresses=handpicked_addresses)
-        return staker_reservoir
+        reservoir = make_decentralized_staking_provider_reservoir(application_agent=self.publisher.application_agent,
+                                                                  include_addresses=handpicked_addresses,
+                                                                  pagination_size=self.publisher.application_agent.get_staking_providers_population())  # TODO:  Use another size?
+        return reservoir
 
 
 class EnactedPolicy:

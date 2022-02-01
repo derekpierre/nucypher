@@ -236,7 +236,7 @@ def select_config_file(emitter: StdoutEmitter,
                                                          command=config_class.NAME), color='red')
         raise click.Abort()
 
-    checksum_address = checksum_address or os.environ.get(NUCYPHER_ENVVAR_WORKER_ADDRESS, None)  # TODO: Deprecate worker_address in favor of checksum_address
+    checksum_address = checksum_address or os.environ.get(NUCYPHER_ENVVAR_WORKER_ADDRESS, None)  # TODO: Deprecate operator_address in favor of checksum_address
 
     parsed_config_files = list()
     parsed_addresses_and_filenames = list()

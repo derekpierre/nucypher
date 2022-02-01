@@ -79,10 +79,10 @@ def test_investigator_requests_slashing(testerchain,
     # The staker hasn't bond a worker yet
     assert NULL_ADDRESS == staking_agent.get_worker_from_staker(staker_address=staker_account)
 
-    _txhash = staking_agent.bond_worker(transacting_power=staker_tpower, worker_address=worker_account)
+    _txhash = staking_agent.bond_worker(transacting_power=staker_tpower, operator_address=worker_account)
 
     assert worker_account == staking_agent.get_worker_from_staker(staker_address=staker_account)
-    assert staker_account == staking_agent.get_staker_from_worker(worker_address=worker_account)
+    assert staker_account == staking_agent.get_staker_from_worker(operator_address=worker_account)
 
     ###### END OF STAKING ESCROW STUFF ####
 

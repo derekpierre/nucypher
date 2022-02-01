@@ -166,7 +166,7 @@ def paint_stakers(emitter, stakers: List[str], registry: BaseContractRegistry) -
 
         owned_tokens = staker.owned_tokens()
         last_committed_period = staker.last_committed_period
-        worker = staker.worker_address
+        worker = staker.operator_address
         is_restaking = staker.is_restaking
         is_winding_down = staker.is_winding_down
         is_taking_snapshots = staker.is_taking_snapshots
@@ -200,9 +200,9 @@ def paint_stakers(emitter, stakers: List[str], registry: BaseContractRegistry) -
             emitter.echo(f"Missing {missing_commitments} commitments "
                          f"(last time for period #{last_committed_period})", color='red')
 
-        emitter.echo(f"{tab}  {'Worker:':10} ", nl=False)
+        emitter.echo(f"{tab}  {'Operator:':10} ", nl=False)
         if worker == NULL_ADDRESS:
-            emitter.echo(f"Worker not bonded", color='red')
+            emitter.echo(f"Operator not bonded", color='red')
         else:
             emitter.echo(f"{worker}")
 
