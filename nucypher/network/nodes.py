@@ -786,10 +786,7 @@ class Learner:
         current_teacher = self.current_teacher_node()  # Will raise if there's no available teacher.
 
         if isinstance(self, Teacher):
-            try:
-                announce_nodes = [self.metadata()]
-            except:
-                import ipdb; ipdb.set_trace()
+            announce_nodes = [self.metadata()]
         else:
             announce_nodes = []
 
