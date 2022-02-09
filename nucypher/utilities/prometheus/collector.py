@@ -27,15 +27,14 @@ from eth_typing.evm import ChecksumAddress
 
 import nucypher
 from nucypher.blockchain.eth.actors import NucypherTokenActor
-from nucypher.blockchain.eth.agents import ContractAgency, PolicyManagerAgent, StakingEscrowAgent, \
-    PREApplicationAgent
+from nucypher.blockchain.eth.agents import ContractAgency, PolicyManagerAgent, PREApplicationAgent
 from nucypher.blockchain.eth.interfaces import BlockchainInterfaceFactory
 from nucypher.blockchain.eth.registry import BaseContractRegistry
 from nucypher.datastore.queries import get_reencryption_requests
 
 from typing import Dict, Union, Type
 
-ContractAgents = Union[StakingEscrowAgent, PolicyManagerAgent]
+ContractAgents = Union[PolicyManagerAgent, ]
 
 
 class MetricsCollector(ABC):

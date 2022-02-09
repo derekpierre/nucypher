@@ -23,7 +23,6 @@ from nucypher.blockchain.eth.agents import (
     AdjudicatorAgent,
     ContractAgency,
     PolicyManagerAgent,
-    StakingEscrowAgent
 )
 from nucypher.blockchain.eth.constants import (
     ADJUDICATOR_CONTRACT_NAME,
@@ -33,8 +32,6 @@ from nucypher.blockchain.eth.constants import (
     STAKING_ESCROW_CONTRACT_NAME, STAKING_ESCROW_STUB_CONTRACT_NAME
 )
 from nucypher.blockchain.eth.deployers import (
-    StakingEscrowDeployer,
-    StakingInterfaceDeployer,
     SubscriptionManagerDeployer
 )
 from nucypher.blockchain.eth.registry import InMemoryContractRegistry, LocalContractRegistry
@@ -170,37 +167,6 @@ def test_transfer_ownership(click_runner, testerchain, agency_local_registry):
     assert policy_agent.owner == testerchain.etherbase_account
     assert adjudicator_agent.owner == testerchain.etherbase_account
 
-    # Test transfer ownersh
-
-
-@pytest.mark.skip()
-def test_transfer_ownership_staking_interface_router(click_runner, testerchain, agency_local_registry):
-
-    maclane = testerchain.unassigned_accounts[0]
-
-    ownership_command = ('transfer-ownership',
-                         '--registry-infile', str(agency_local_registry.filepath.absolute()),
-                         '--contract-name', StakingInterfaceDeployer.contract_name,
-                         '--provider', TEST_PROVIDER_URI,
-                         '--signer', TEST_PROVIDER_URI,
-                         '--network', TEMPORARY_DOMAIN,
-                         '--target-address', maclane,
-                         '--debug')
-
-    account_index = '0\n'
-    yes = 'Y\n'
-    user_input = account_index + yes + yes
-
-    result = click_runner.invoke(deploy,
-                                 ownership_command,
-                                 input=user_input,
-                                 catch_exceptions=False)
-    assert result.exit_code == 0, result.output
-
-    # This owner is updated
-    interface_deployer = StakingInterfaceDeployer(registry=agency_local_registry)
-    assert interface_deployer.owner == maclane
-
 
 def test_bare_contract_deployment_to_alternate_registry(click_runner, agency_local_registry):
 
@@ -227,11 +193,6 @@ def test_bare_contract_deployment_to_alternate_registry(click_runner, agency_loc
     assert ALTERNATE_REGISTRY_FILEPATH.exists()
     new_registry = LocalContractRegistry(filepath=ALTERNATE_REGISTRY_FILEPATH)
     assert agency_local_registry != new_registry
-
-    # FIXME
-    old_enrolled_names = list(agency_local_registry.enrolled_names).count(StakingEscrowDeployer.contract_name)
-    new_enrolled_names = list(new_registry.enrolled_names).count(StakingEscrowDeployer.contract_name)
-    # assert new_enrolled_names == old_enrolled_names + 1
 
 
 @pytest.mark.skip()

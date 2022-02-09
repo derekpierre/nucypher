@@ -25,12 +25,11 @@ from nucypher.blockchain.eth.agents import (
     ContractAgency,
     NucypherTokenAgent,
     PolicyManagerAgent,
-    StakingEscrowAgent,
 )
 from nucypher.blockchain.eth.interfaces import BlockchainInterface
 from nucypher.blockchain.eth.registry import InMemoryContractRegistry
 from nucypher.blockchain.eth.signers import KeystoreSigner
-from nucypher.config.characters import StakeHolderConfiguration, UrsulaConfiguration
+from nucypher.config.characters import UrsulaConfiguration
 from tests.constants import (
     KEYFILE_NAME_TEMPLATE,
     MOCK_KEYSTORE_PATH,
@@ -55,24 +54,6 @@ def mock_contract_agency(monkeypatch, module_mocker, application_economics):
     mock_agency = MockContractAgency()
     yield mock_agency
     mock_agency.reset()
-
-
-@pytest.fixture(scope='function', autouse=True)
-def mock_token_agent(mock_testerchain, application_economics, mock_contract_agency):
-    mock_agent = mock_contract_agency.get_agent(NucypherTokenAgent)
-    yield mock_agent
-    mock_agent.reset()
-
-
-@pytest.fixture(scope='function', autouse=True)
-def mock_staking_agent(mock_testerchain, application_economics, mock_contract_agency, mocker):
-    mock_agent = mock_contract_agency.get_agent(StakingEscrowAgent)
-
-    # Handle the special case of commit_to_next_period, which returns a txhash due to the fire_and_forget option
-    mock_agent.commit_to_next_period = mocker.Mock(return_value=MockContractAgent.FAKE_TX_HASH)
-
-    yield mock_agent
-    mock_agent.reset()
 
 
 @pytest.fixture(scope='function', autouse=True)
@@ -165,14 +146,14 @@ def mock_account(mock_accounts):
 
 
 @pytest.fixture(scope='module')
-def worker_account(mock_accounts, mock_testerchain):
+def operator_account(mock_accounts, mock_testerchain):
     account = list(mock_accounts.values())[0]
     return account
 
 
 @pytest.fixture(scope='module')
-def operator_address(worker_account):
-    address = worker_account.address
+def operator_address(operator_account):
+    address = operator_account.address
     return address
 
 

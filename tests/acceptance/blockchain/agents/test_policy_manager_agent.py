@@ -26,7 +26,7 @@ from eth_utils import is_checksum_address, to_wei
 from nucypher.blockchain.eth.constants import POLICY_ID_LENGTH
 from nucypher.blockchain.eth.signers.software import Web3Signer
 from nucypher.crypto.powers import TransactingPower
-from nucypher.blockchain.eth.agents import ContractAgency, PolicyManagerAgent, StakingEscrowAgent, NucypherTokenAgent
+from nucypher.blockchain.eth.agents import ContractAgency, PolicyManagerAgent, NucypherTokenAgent
 from tests.constants import FEE_RATE_RANGE
 
 MockPolicyMetadata = collections.namedtuple('MockPolicyMetadata', 'policy_id author addresses')

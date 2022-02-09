@@ -64,7 +64,7 @@ option_poa = click.option('--poa/--disable-poa', help="Inject POA middleware", i
 option_registry_filepath = click.option('--registry-filepath', help="Custom contract registry filepath", type=EXISTING_READABLE_FILE)
 option_shares = click.option('--shares', '-n', help="N-Total shares", type=click.INT)
 option_signer_uri = click.option('--signer', 'signer_uri', '-S', default=None, type=str)
-option_staking_address = click.option('--staking-address', help="Address of a NuCypher staker", type=EIP55_CHECKSUM_ADDRESS)
+option_staking_provider_address = click.option('--staking-provider-address', help="Address of a staking provider", type=EIP55_CHECKSUM_ADDRESS)
 option_teacher_uri = click.option('--teacher', 'teacher_uri', help="An Ursula URI to start learning from (seednode)", type=click.STRING)
 option_threshold = click.option('--threshold', '-m', help="M-Threshold KFrags", type=click.INT)
 option_treasure_map = click.option('--treasure-map', 'treasure_map', help="Encrypted treasure map as base64 for retrieval", type=click.STRING, required=True)

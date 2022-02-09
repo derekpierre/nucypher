@@ -20,14 +20,13 @@ from pathlib import Path
 
 import click
 
-from nucypher.blockchain.eth.actors import Staker
-from nucypher.blockchain.eth.agents import ContractAgency, PolicyManagerAgent, StakingEscrowAgent
-from nucypher.blockchain.eth.constants import (
-    POLICY_MANAGER_CONTRACT_NAME,
-    STAKING_ESCROW_CONTRACT_NAME
+from nucypher.blockchain.eth.agents import (
+    ContractAgency,
+    PREApplicationAgent,
+    SubscriptionManagerAgent, EthereumContractAgent
 )
+from nucypher.blockchain.eth.constants import AVERAGE_BLOCK_TIME_IN_SECONDS
 from nucypher.blockchain.eth.networks import NetworksInventory
-from nucypher.blockchain.eth.utils import estimate_block_number_for_period
 from nucypher.cli.config import group_general_config
 from nucypher.cli.options import (
     group_options,
@@ -37,11 +36,9 @@ from nucypher.cli.options import (
     option_network,
     option_poa,
     option_provider_uri,
-    option_registry_filepath,
-    option_staking_address,
+    option_registry_filepath, option_staking_provider_address,
 )
-from nucypher.cli.painting.staking import paint_fee_rate_range, paint_stakes
-from nucypher.cli.painting.status import paint_contract_status, paint_locked_tokens_status, paint_stakers
+from nucypher.cli.painting.status import paint_contract_status
 from nucypher.cli.utils import (
     connect_to_blockchain,
     get_registry,
@@ -237,12 +234,3 @@ def events(general_config, registry_options, contract_name, from_block, to_block
                             argument_filters=argument_filters,
                             csv_output_file=csv_output_file)
 
-
-@status.command(name='fee-range')
-@group_registry_options
-@group_general_config
-def fee_range(general_config, registry_options):
-    """Provide information on the global fee range – the range into which the minimum fee rate must fall."""
-    emitter, registry, blockchain = registry_options.setup(general_config=general_config)
-    policy_agent = ContractAgency.get_agent(PolicyManagerAgent, registry=registry)
-    paint_fee_rate_range(emitter=emitter, policy_agent=policy_agent)

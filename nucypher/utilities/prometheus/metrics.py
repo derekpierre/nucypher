@@ -49,7 +49,7 @@ from typing import List
 from twisted.internet import reactor, task
 from twisted.web.resource import Resource
 
-from nucypher.blockchain.eth.agents import StakingEscrowAgent, PolicyManagerAgent
+from nucypher.blockchain.eth.agents import PolicyManagerAgent
 
 
 class PrometheusMetricsConfig:
