@@ -97,6 +97,13 @@ option_to_block = click.option('--to-block',
                                help="Collect events until this block number; defaults to 'latest' block number",
                                type=click.INT)
 
+STAKING_ESCROW = 'StakingEscrow'
+POLICY_MANAGER = 'PolicyManager'
+
+LEGACY_CONTRACT_VERSIONS = {
+    STAKING_ESCROW: 'v5.7.1',
+    POLICY_MANAGER: 'v6.2.1'
+}
 
 @click.group()
 def status():
@@ -192,17 +199,9 @@ def events(general_config, registry_options, contract_name, from_block, to_block
 
     emitter.echo(f"Retrieving events from block {from_block} to {to_block}")
 
-    STAKING_ESCROW = 'StakingEscrow'
-    POLICY_MANAGER = 'PolicyManager'
-
-    legacy_versions = {
-        STAKING_ESCROW: 'v5.7.1',
-        POLICY_MANAGER: 'v6.2.1'
-    }
-
     contract_version = None
-    if legacy and contract_name in legacy_versions:
-        contract_version = legacy_versions[contract_name]
+    if legacy and contract_name in LEGACY_CONTRACT_VERSIONS:
+        contract_version = LEGACY_CONTRACT_VERSIONS[contract_name]
 
     for contract_name in contract_names:
         if legacy:  # TODO: Handle legacy events
@@ -212,7 +211,6 @@ def events(general_config, registry_options, contract_name, from_block, to_block
                 contract_version=contract_version,
                 proxy_name='Dispatcher',
                 use_proxy_address=True,
-                allow_old_contract_version_with_proxy=True
                )
             agent = EthereumContractAgent(contract=versioned_contract)
             agent.contract_name = contract_name
