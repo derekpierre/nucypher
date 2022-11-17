@@ -1,19 +1,15 @@
-
-
-
 import json
 from pathlib import Path
 from typing import Optional
 
-from constant_sorrow.constants import UNINITIALIZED_CONFIGURATION
 from cryptography.x509 import Certificate
 from eth_utils import is_checksum_address
 
 from nucypher.config.base import CharacterConfiguration
 from nucypher.config.constants import (
-    NUCYPHER_ENVVAR_OPERATOR_ETH_PASSWORD,
     NUCYPHER_ENVVAR_ALICE_ETH_PASSWORD,
-    NUCYPHER_ENVVAR_BOB_ETH_PASSWORD
+    NUCYPHER_ENVVAR_BOB_ETH_PASSWORD,
+    NUCYPHER_ENVVAR_OPERATOR_ETH_PASSWORD,
 )
 from nucypher.utilities.networking import LOOPBACK_ADDRESS
 
@@ -27,7 +23,6 @@ class UrsulaConfiguration(CharacterConfiguration):
     DEFAULT_REST_PORT = 9151
     DEFAULT_DEVELOPMENT_REST_HOST = LOOPBACK_ADDRESS
     DEFAULT_DEVELOPMENT_REST_PORT = 10151
-    DEFAULT_AVAILABILITY_CHECKS = False
     LOCAL_SIGNERS_ALLOWED = True
     SIGNER_ENVVAR = NUCYPHER_ENVVAR_OPERATOR_ETH_PASSWORD
     MNEMONIC_KEYSTORE = True
@@ -39,7 +34,6 @@ class UrsulaConfiguration(CharacterConfiguration):
                  keystore_path: Optional[Path] = None,
                  rest_port: int = None,
                  certificate: Certificate = None,
-                 availability_check: bool = None,
                  *args, **kwargs) -> None:
 
         if dev_mode:
@@ -56,7 +50,6 @@ class UrsulaConfiguration(CharacterConfiguration):
         self.rest_host = rest_host
         self.certificate = certificate
         self.operator_address = operator_address
-        self.availability_check = availability_check if availability_check is not None else self.DEFAULT_AVAILABILITY_CHECKS
         super().__init__(dev_mode=dev_mode, keystore_path=keystore_path, *args, **kwargs)
 
     @classmethod
@@ -88,7 +81,6 @@ class UrsulaConfiguration(CharacterConfiguration):
             operator_address=self.operator_address,
             rest_host=self.rest_host,
             rest_port=self.rest_port,
-            availability_check=self.availability_check,
 
             # TODO: Resolve variable prefixing below (uses nested configuration fields?)
             payment_method=self.payment_method,

@@ -1,6 +1,3 @@
-
-
-
 import contextlib
 import json
 import time
@@ -33,8 +30,8 @@ from cryptography.x509 import Certificate, NameOID
 from eth_typing.evm import ChecksumAddress
 from eth_utils import to_checksum_address
 from nucypher_core import (
-    Address,
     HRAC,
+    Address,
     Conditions,
     EncryptedKeyFrag,
     EncryptedTreasureMap,
@@ -65,7 +62,6 @@ from nucypher.characters.banners import (
 )
 from nucypher.characters.base import Character, Learner
 from nucypher.config.storages import NodeStorage
-from nucypher.utilities.emitters import StdoutEmitter
 from nucypher.crypto.keypairs import HostingKeypair
 from nucypher.crypto.powers import (
     DecryptingPower,
@@ -81,10 +77,11 @@ from nucypher.network.nodes import TEACHER_NODES, NodeSprout, Teacher
 from nucypher.network.protocols import parse_node_uri
 from nucypher.network.retrieval import RetrievalClient
 from nucypher.network.server import ProxyRESTServer, make_rest_app
-from nucypher.network.trackers import AvailabilityTracker, OperatorBondedTracker
+from nucypher.network.trackers import OperatorBondedTracker
 from nucypher.policy.kits import PolicyMessageKit
 from nucypher.policy.payment import FreeReencryptions, PaymentMethod
 from nucypher.policy.policies import BlockchainPolicy, FederatedPolicy, Policy
+from nucypher.utilities.emitters import StdoutEmitter
 from nucypher.utilities.logging import Logger
 from nucypher.utilities.networking import validate_operator_ip
 
@@ -575,7 +572,6 @@ class Ursula(Teacher, Character, Operator):
                  certificate: Certificate = None,
                  certificate_filepath: Optional[Path] = None,
 
-                 availability_check: bool = False,  # TODO: Remove from init
                  metadata: Optional[NodeMetadata] = None,
 
                  # Blockchain
@@ -619,8 +615,6 @@ class Ursula(Teacher, Character, Operator):
             self.known_node_class.set_federated_mode(federated_only)
 
             # Health Checks
-            self._availability_check = availability_check
-            self._availability_tracker = AvailabilityTracker(ursula=self)
             if not federated_only:
                 self._operator_bonded_tracker = OperatorBondedTracker(ursula=self)
 
@@ -759,7 +753,6 @@ class Ursula(Teacher, Character, Operator):
     def run(self,
             emitter: StdoutEmitter = None,
             discovery: bool = True,  # TODO: see below
-            availability: bool = False,
             worker: bool = True,
             hendrix: bool = True,
             start_reactor: bool = True,
@@ -791,11 +784,6 @@ class Ursula(Teacher, Character, Operator):
             if emitter:
                 emitter.message(f"✓ Node Discovery ({self.domain.capitalize()})", color='green')
 
-        if self._availability_check or availability:
-            self._availability_tracker.start(now=eager)
-            if emitter:
-                emitter.message(f"✓ Availability Checks", color='green')
-
         if worker and not self.federated_only:
             if block_until_ready:
                 # Sets (staker's) checksum address; Prevent worker startup before bonding
@@ -804,7 +792,10 @@ class Ursula(Teacher, Character, Operator):
             work_is_needed = self.get_work_is_needed_check()(self)
             if work_is_needed:
                 message = "✓ Work Tracking"
-                self.work_tracker.start(commit_now=True, requirement_func=self.work_tracker.worker.get_work_is_needed_check())  # requirement_func=self._availability_tracker.status)  # TODO: #2277
+                self.work_tracker.start(
+                    commit_now=True,
+                    requirement_func=self.work_tracker.worker.get_work_is_needed_check(),
+                )
             else:
                 message = "✓ Operator already confirmed.  Not starting worktracker."
             if emitter:
@@ -861,7 +852,6 @@ class Ursula(Teacher, Character, Operator):
         self.log.debug(f"---------Stopping {self}")
         # Handles the shutdown of a partially initialized character.
         with contextlib.suppress(AttributeError):  # TODO: Is this acceptable here, what are alternatives?
-            self._availability_tracker.stop()
             self.stop_learning_loop()
             if not self.federated_only:
                 self.work_tracker.stop()

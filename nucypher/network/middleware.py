@@ -6,15 +6,13 @@ import ssl
 import time
 from http import HTTPStatus
 from pathlib import Path
-from typing import Optional, Tuple
-from typing import Sequence
+from typing import Optional, Sequence
 
 import requests
 from constant_sorrow.constants import EXEMPT_FROM_VERIFICATION
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
-from cryptography.x509 import Certificate
-from nucypher_core import MetadataRequest, FleetStateChecksum, NodeMetadata
+from nucypher_core import FleetStateChecksum, MetadataRequest, NodeMetadata
 from requests.exceptions import SSLError
 
 from nucypher.blockchain.eth.registry import BaseContractRegistry
@@ -260,14 +258,6 @@ class RestMiddleware:
             data=reencryption_request_bytes,
             timeout=2
         )
-        return response
-
-    def check_availability(self, initiator, responder):
-        response = self.client.post(node_or_sprout=responder,
-                                    data=bytes(initiator.metatada()),
-                                    path="check_availability",
-                                    timeout=6,  # Two round trips are expected
-                                    )
         return response
 
     def ping(self, node):
