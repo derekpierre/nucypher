@@ -25,6 +25,11 @@ contract SubscriptionManager is Initializable {
         uint32 endTimestamp
     );
 
+    event PolicyRevoked(
+        bytes16 indexed policyId,
+        address indexed sender
+    );
+
     event FeeRateUpdated(uint256 oldFeeRate, uint256 newFeeRate);
 
     // Per-second service fee rate
@@ -108,6 +113,20 @@ contract SubscriptionManager is Initializable {
 
     function isPolicyActive(bytes16 _policyID) public view returns(bool){
         return _policies[_policyID].endTimestamp > block.timestamp;
+    }
+
+    function revokePolicy(bytes16 _policyId) external {
+        Policy memory policy = _policies[_policyId];
+        address owner = policy.owner == address(0) ? policy.sponsor : policy.owner;
+        require(owner == msg.sender);
+
+        delete _policies[_policyId];
+        // TODO what about refunds?
+
+        emit PolicyRevoked(
+            _policyId,
+            msg.sender
+        );
     }
 
     function _setFeeRate(uint256 newFee) internal {

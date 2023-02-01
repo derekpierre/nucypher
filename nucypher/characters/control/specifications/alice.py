@@ -20,10 +20,10 @@ import click
 from marshmallow import validates_schema
 
 from nucypher.characters.control.specifications import fields as character_fields
+from nucypher.cli import options, types
 from nucypher.control.specifications import fields as base_fields
 from nucypher.control.specifications.base import BaseSchema
 from nucypher.control.specifications.exceptions import InvalidArgumentCombo
-from nucypher.cli import options, types
 
 
 class PolicyBaseSchema(BaseSchema):
@@ -115,23 +115,6 @@ class DerivePolicyEncryptionKey(BaseSchema):
 
     # output
     policy_encrypting_key = character_fields.Key(dump_only=True)
-
-
-class Revoke(BaseSchema):
-
-    label = character_fields.Label(
-        required=True, load_only=True,
-        click=options.option_label(required=True))
-    bob_verifying_key = character_fields.Key(
-        required=True, load_only=True,
-        click=click.option(
-            '--bob-verifying-key',
-            '-bvk',
-            help="Bob's verifying key as a hexadecimal string", type=click.STRING,
-            required=True))
-
-    # output
-    failed_revocations = base_fields.Integer(dump_only=True)
 
 
 class Decrypt(BaseSchema):

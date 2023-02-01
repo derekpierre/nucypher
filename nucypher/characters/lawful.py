@@ -24,16 +24,27 @@ from http import HTTPStatus
 from json.decoder import JSONDecodeError
 from pathlib import Path
 from queue import Queue
-from typing import Dict, Iterable, List, NamedTuple, Tuple, Union, Optional, Sequence, Set, Any
+from typing import (
+    Any,
+    Dict,
+    Iterable,
+    List,
+    NamedTuple,
+    Optional,
+    Sequence,
+    Set,
+    Tuple,
+    Union,
+)
 
 import maya
 from constant_sorrow import constants
 from constant_sorrow.constants import (
-    PUBLIC_ONLY,
-    STRANGER_ALICE,
-    READY,
     INVALIDATED,
-    NOT_SIGNED
+    NOT_SIGNED,
+    PUBLIC_ONLY,
+    READY,
+    STRANGER_ALICE,
 )
 from cryptography.hazmat.primitives.serialization import Encoding
 from cryptography.x509 import Certificate, NameOID
@@ -41,19 +52,16 @@ from eth_typing.evm import ChecksumAddress
 from eth_utils import to_checksum_address
 from flask import Response, request
 from nucypher_core import (
-    MessageKit,
+    HRAC,
     EncryptedKeyFrag,
-    TreasureMap,
     EncryptedTreasureMap,
-    ReencryptionResponse,
+    MessageKit,
     NodeMetadata,
     NodeMetadataPayload,
-    HRAC,
+    ReencryptionResponse,
+    TreasureMap,
 )
-from nucypher_core.umbral import (
-    PublicKey, VerifiedKeyFrag, reencrypt,
-
-)
+from nucypher_core.umbral import PublicKey, VerifiedKeyFrag, reencrypt
 from twisted.internet import reactor, stdio
 from twisted.internet.defer import Deferred
 from twisted.logger import Logger
@@ -62,14 +70,27 @@ from web3.types import TxReceipt
 import nucypher
 from nucypher.acumen.nicknames import Nickname
 from nucypher.acumen.perception import ArchivedFleetState, RemoteUrsulaStatus
-from nucypher.blockchain.eth.actors import Operator, BlockchainPolicyAuthor
-from nucypher.blockchain.eth.agents import ContractAgency, PREApplicationAgent
+from nucypher.blockchain.eth.actors import BlockchainPolicyAuthor, Operator
+from nucypher.blockchain.eth.agents import (
+    ContractAgency,
+    PREApplicationAgent,
+    SubscriptionManagerAgent,
+)
 from nucypher.blockchain.eth.interfaces import BlockchainInterfaceFactory
 from nucypher.blockchain.eth.registry import BaseContractRegistry
 from nucypher.blockchain.eth.signers.software import Web3Signer
-from nucypher.characters.banners import ALICE_BANNER, BOB_BANNER, ENRICO_BANNER, URSULA_BANNER
+from nucypher.characters.banners import (
+    ALICE_BANNER,
+    BOB_BANNER,
+    ENRICO_BANNER,
+    URSULA_BANNER,
+)
 from nucypher.characters.base import Character, Learner
-from nucypher.characters.control.interfaces import AliceInterface, BobInterface, EnricoInterface
+from nucypher.characters.control.interfaces import (
+    AliceInterface,
+    BobInterface,
+    EnricoInterface,
+)
 from nucypher.cli.processes import UrsulaCommandProtocol
 from nucypher.config.storages import NodeStorage
 from nucypher.control.controllers import WebController
@@ -80,19 +101,19 @@ from nucypher.crypto.powers import (
     DelegatingPower,
     PowerUpError,
     SigningPower,
-    TransactingPower,
     TLSHostingPower,
+    TransactingPower,
 )
 from nucypher.network.exceptions import NodeSeemsToBeDown
 from nucypher.network.middleware import RestMiddleware
-from nucypher.network.nodes import NodeSprout, TEACHER_NODES, Teacher
+from nucypher.network.nodes import TEACHER_NODES, NodeSprout, Teacher
 from nucypher.network.protocols import parse_node_uri
 from nucypher.network.retrieval import RetrievalClient
 from nucypher.network.server import ProxyRESTServer, make_rest_app
 from nucypher.network.trackers import AvailabilityTracker, OperatorBondedTracker
 from nucypher.policy.kits import PolicyMessageKit
-from nucypher.policy.payment import PaymentMethod, FreeReencryptions
-from nucypher.policy.policies import Policy, BlockchainPolicy, FederatedPolicy
+from nucypher.policy.payment import FreeReencryptions, PaymentMethod
+from nucypher.policy.policies import BlockchainPolicy, FederatedPolicy, Policy
 from nucypher.utilities.logging import Logger
 from nucypher.utilities.networking import validate_operator_ip
 
@@ -371,54 +392,22 @@ class Alice(Character, BlockchainPolicyAuthor):
         policy_pubkey = alice_delegating_power.get_pubkey_from_label(label)
         return policy_pubkey
 
-    def revoke(self,
-               policy: Policy,
-               onchain: bool = True,  # forced to False for federated mode
-               offchain: bool = True
-               ) -> Tuple[TxReceipt, Dict[ChecksumAddress, Tuple['Revocation', Exception]]]:
+    def revoke(self, policy: Policy) -> TxReceipt:
 
-        if not (offchain or onchain):
-            raise ValueError('offchain or onchain must be True to issue revocation')
+        receipt = dict()
 
-        receipt, failed = dict(), dict()
+        if not self.federated_only:
+            subscription_manager_agent = ContractAgency.get_agent(
+                SubscriptionManagerAgent, registry=self.registry
+            )
+            receipt = subscription_manager_agent.revoke_policy(
+                policy_id=bytes(policy.hrac),
+                transacting_power=self._crypto_power.power_ups(TransactingPower),
+            )
 
-        if onchain and (not self.federated_only):
-            pass
-            # TODO: Decouple onchain revocation from SubscriptionManager or deprecate.
-            # receipt = self.policy_agent.revoke_policy(policy_id=bytes(policy.hrac),
-            #                                           transacting_power=self._crypto_power.power_ups(TransactingPower))
-
-        if offchain:
-            """
-            Parses the treasure map and revokes onchain arrangements in it.
-            If any nodes cannot be revoked, then the node_id is added to a
-            dict as a key, and the revocation and Ursula's response is added as
-            a value.
-            """
-            try:
-                # Wait for a revocation threshold of nodes to be known ((n - m) + 1)
-                revocation_threshold = ((policy.shares - policy.threshold) + 1)
-                self.block_until_specific_nodes_are_known(
-                    policy.revocation_kit.revokable_addresses,
-                    allow_missing=(policy.shares - revocation_threshold))
-            except self.NotEnoughTeachers:
-                raise  # TODO  NRN
-
-            for node_id in policy.revocation_kit.revokable_addresses:
-                ursula = self.known_nodes[node_id]
-                revocation = policy.revocation_kit[node_id]
-                try:
-                    response = self.network_middleware.request_revocation(ursula, revocation)
-                except self.network_middleware.NotFound:
-                    failed[node_id] = (revocation, self.network_middleware.NotFound)
-                except self.network_middleware.UnexpectedResponse:
-                    failed[node_id] = (revocation, self.network_middleware.UnexpectedResponse)
-                else:
-                    if response.status_code != 200:
-                        message = f"Failed to revocation for node {node_id} with status code {response.status_code}"
-                        raise self.ActorError(message)
-
-        return receipt, failed
+        # remove active policy
+        del self.active_policies[policy.hrac]
+        return receipt
 
     def decrypt_message_kit(self, label: bytes, message_kit: MessageKit) -> List[bytes]:
         """
@@ -952,6 +941,7 @@ class Ursula(Teacher, Character, Operator):
         if prometheus_config:
             # Locally scoped to prevent import without prometheus explicitly installed
             from nucypher.utilities.prometheus.metrics import start_prometheus_exporter
+
             start_prometheus_exporter(ursula=self, prometheus_config=prometheus_config)
             if emitter:
                 emitter.message(f"✓ Prometheus Exporter", color='green')

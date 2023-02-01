@@ -15,18 +15,16 @@
  along with nucypher.  If not, see <https://www.gnu.org/licenses/>.
 """
 
-from typing import Union, List
+from typing import List, Union
 
 import maya
-
-from nucypher_core import MessageKit, HRAC, EncryptedTreasureMap
+from nucypher_core import EncryptedTreasureMap, MessageKit
 from nucypher_core.umbral import PublicKey
 
 from nucypher.characters.base import Character
 from nucypher.characters.control.specifications import alice, bob, enrico
-from nucypher.control.interfaces import attach_schema, ControlInterface
+from nucypher.control.interfaces import ControlInterface, attach_schema
 from nucypher.crypto.powers import DecryptingPower, SigningPower
-from nucypher.network.middleware import RestMiddleware
 
 
 class CharacterPublicInterface(ControlInterface):
@@ -101,24 +99,6 @@ class AliceInterface(CharacterPublicInterface):
 
         return response_data
 
-    @attach_schema(alice.Revoke)
-    def revoke(self, label: bytes, bob_verifying_key: PublicKey) -> dict:
-
-        # TODO: Move deeper into characters
-        policy_hrac = HRAC(self.implementer.stamp.as_umbral_pubkey(), bob_verifying_key, label)
-        policy = self.implementer.active_policies[policy_hrac]
-
-        receipt, failed_revocations = self.implementer.revoke(policy)
-        if len(failed_revocations) > 0:
-            for node_id, attempt in failed_revocations.items():
-                revocation, fail_reason = attempt
-                if fail_reason == RestMiddleware.NotFound:
-                    del (failed_revocations[node_id])
-        if len(failed_revocations) <= (policy.shares - policy.threshold + 1):
-            del (self.implementer.active_policies[policy_hrac])
-
-        response_data = {'failed_revocations': len(failed_revocations)}
-        return response_data
 
     @attach_schema(alice.Decrypt)
     def decrypt(self, label: bytes, message_kit: MessageKit) -> dict:

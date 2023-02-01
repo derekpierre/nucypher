@@ -20,7 +20,6 @@ import datetime
 
 import maya
 import pytest
-
 from nucypher_core import EncryptedKeyFrag, RevocationOrder
 
 from nucypher.characters.lawful import Enrico
@@ -93,7 +92,6 @@ def test_federated_alice_can_decrypt(federated_alice, federated_bob):
     assert [plaintext] == decrypted_data
 
 
-@pytest.mark.skip("Needs rework post-TMcKF")  # TODO: Implement offchain revocation.
 @pytest.mark.usefixtures('federated_ursulas')
 def test_revocation(federated_alice, federated_bob):
     threshold, shares = 2, 3
@@ -102,23 +100,11 @@ def test_revocation(federated_alice, federated_bob):
 
     policy = federated_alice.grant(federated_bob, label, threshold=threshold, shares=shares, expiration=policy_end_datetime)
 
-    for node_id, encrypted_kfrag in policy.treasure_map:
-        assert policy.revocation_kit[node_id]
-
-    # Test revocation kit's signatures
-    for revocation in policy.revocation_kit:
-        assert revocation.verify_signature(federated_alice.stamp.as_umbral_pubkey())
-
-    # Test Revocation deserialization
-    revocation = policy.revocation_kit[node_id]
-    revocation_bytes = bytes(revocation)
-    deserialized_revocation = RevocationOrder.from_bytes(revocation_bytes)
-    assert deserialized_revocation == revocation
-
     # Attempt to revoke the new policy
-    receipt, failed_revocations = federated_alice.revoke(policy)
-    assert len(failed_revocations) == 0
+    _ = federated_alice.revoke(policy)
+    assert policy.hrac not in federated_alice.active_policies
 
     # Try to revoke the already revoked policy
-    receipt, already_revoked = federated_alice.revoke(policy)
-    assert len(already_revoked) == 3
+
+    with pytest.raises(KeyError):
+        _ = federated_alice.revoke(policy)

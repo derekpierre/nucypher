@@ -17,15 +17,19 @@
 import random
 
 import pytest
-
 from nucypher_core.umbral import SecretKey
 
-from nucypher.characters.control.specifications.fields import Key
-from nucypher.control.specifications.exceptions import InvalidArgumentCombo, InvalidInputData
-from nucypher.utilities.porter.control.specifications.fields import UrsulaInfoSchema, RetrievalResultSchema
+from nucypher.control.specifications.exceptions import (
+    InvalidArgumentCombo,
+    InvalidInputData,
+)
+from nucypher.utilities.porter.control.specifications.fields import (
+    RetrievalResultSchema,
+    UrsulaInfoSchema,
+)
 from nucypher.utilities.porter.control.specifications.porter_schema import (
     AliceGetUrsulas,
-    BobRetrieveCFrags
+    BobRetrieveCFrags,
 )
 from nucypher.utilities.porter.porter import Porter
 from tests.utils.policy import retrieval_request_setup
@@ -154,10 +158,6 @@ def test_alice_get_ursulas_schema(get_random_checksum_address):
 
     output = AliceGetUrsulas().dump(obj={'ursulas': ursulas_info})
     assert output == {"ursulas": expected_ursulas_info}
-
-
-def test_alice_revoke():
-    pass  # TODO
 
 
 def test_bob_retrieve_cfrags(federated_porter,

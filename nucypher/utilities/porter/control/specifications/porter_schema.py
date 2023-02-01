@@ -107,10 +107,6 @@ class AliceGetUrsulas(BaseSchema):
                                        f"common entries {common_ursulas}")
 
 
-class AliceRevoke(BaseSchema):
-    pass  # TODO need to understand revoke process better
-
-
 #
 # Bob Endpoints
 #

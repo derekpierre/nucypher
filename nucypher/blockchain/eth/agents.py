@@ -21,17 +21,14 @@ import random
 import sys
 from bisect import bisect_right
 from itertools import accumulate
-from typing import Dict, Iterable, List, Tuple, Type, Any, Optional, cast, NamedTuple
+from typing import Any, Dict, Iterable, List, NamedTuple, Optional, Tuple, Type, cast
 
-from constant_sorrow.constants import (  # type: ignore
-    CONTRACT_CALL,
-    TRANSACTION,
-    CONTRACT_ATTRIBUTE
-)
+from constant_sorrow.constants import CONTRACT_ATTRIBUTE  # type: ignore
+from constant_sorrow.constants import CONTRACT_CALL, TRANSACTION
 from eth_typing.evm import ChecksumAddress
 from eth_utils.address import to_checksum_address
 from web3.contract import Contract, ContractFunction
-from web3.types import Wei, Timestamp, TxReceipt, TxParams
+from web3.types import Timestamp, TxParams, TxReceipt, Wei
 
 from nucypher.blockchain.eth.constants import (
     ADJUDICATOR_CONTRACT_NAME,
@@ -39,25 +36,20 @@ from nucypher.blockchain.eth.constants import (
     ETH_ADDRESS_BYTE_LENGTH,
     NUCYPHER_TOKEN_CONTRACT_NAME,
     NULL_ADDRESS,
+    PRE_APPLICATION_CONTRACT_NAME,
     SUBSCRIPTION_MANAGER_CONTRACT_NAME,
-    PRE_APPLICATION_CONTRACT_NAME
 )
 from nucypher.blockchain.eth.decorators import contract_api
 from nucypher.blockchain.eth.events import ContractEvents
 from nucypher.blockchain.eth.interfaces import BlockchainInterfaceFactory
 from nucypher.blockchain.eth.registry import BaseContractRegistry
 from nucypher.config.constants import (
+    NUCYPHER_ENVVAR_STAKING_PROVIDERS_PAGINATION_SIZE,
     NUCYPHER_ENVVAR_STAKING_PROVIDERS_PAGINATION_SIZE_LIGHT_NODE,
-    NUCYPHER_ENVVAR_STAKING_PROVIDERS_PAGINATION_SIZE
 )
 from nucypher.crypto.powers import TransactingPower
 from nucypher.crypto.utils import sha256_digest
-from nucypher.types import (
-    Agent,
-    NuNits,
-    StakingProviderInfo,
-    TuNits
-)
+from nucypher.types import Agent, NuNits, StakingProviderInfo, TuNits
 from nucypher.utilities.logging import Logger  # type: ignore
 
 
@@ -298,7 +290,19 @@ class SubscriptionManagerAgent(EthereumContractAgent):
         receipt = self.blockchain.send_transaction(
             contract_function=contract_function,
             payload=payload,
-            transacting_power=transacting_power
+            transacting_power=transacting_power,
+        )
+        return receipt
+
+    @contract_api(TRANSACTION)
+    def revoke_policy(
+        self, policy_id: bytes, transacting_power: TransactingPower
+    ) -> TxReceipt:
+        contract_function: ContractFunction = self.contract.functions.revokePolicy(
+            policy_id
+        )
+        receipt = self.blockchain.send_transaction(
+            contract_function=contract_function, transacting_power=transacting_power
         )
         return receipt
 

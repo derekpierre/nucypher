@@ -17,10 +17,11 @@
 
 
 import datetime
-import maya
 import os
-import pytest
 import time
+
+import maya
+import pytest
 from constant_sorrow.constants import NO_DECRYPTION_PERFORMED
 from twisted.internet.task import Clock
 
@@ -111,8 +112,8 @@ def test_bob_retrieves(federated_alice,
     assert delivered_cleartexts == cleartexts_delivered_a_second_time
 
     # Let's try retrieve again, but Alice revoked the policy.
-    receipt, failed_revocations = federated_alice.revoke(policy)
-    assert len(failed_revocations) == 0
+    federated_alice.revoke(policy)
+    assert policy.hrac not in federated_alice.active_policies
 
     # One thing to note here is that Bob *can* still retrieve with the cached CFrags,
     # even though this Policy has been revoked.  #892

@@ -22,13 +22,16 @@ from typing import List, NamedTuple, Optional, Sequence
 from constant_sorrow.constants import NO_BLOCKCHAIN_CONNECTION, NO_CONTROL_PROTOCOL
 from eth_typing import ChecksumAddress
 from eth_utils import to_checksum_address
-from flask import request, Response
-from nucypher_core import TreasureMap, RetrievalKit
+from flask import Response, request
+from nucypher_core import RetrievalKit, TreasureMap
 from nucypher_core.umbral import PublicKey
 
 from nucypher.blockchain.eth.agents import ContractAgency, PREApplicationAgent
 from nucypher.blockchain.eth.interfaces import BlockchainInterfaceFactory
-from nucypher.blockchain.eth.registry import BaseContractRegistry, InMemoryContractRegistry
+from nucypher.blockchain.eth.registry import (
+    BaseContractRegistry,
+    InMemoryContractRegistry,
+)
 from nucypher.characters.lawful import Ursula
 from nucypher.control.controllers import JSONRPCController, WebController
 from nucypher.crypto.powers import DecryptingPower
@@ -36,9 +39,9 @@ from nucypher.network.nodes import Learner
 from nucypher.network.retrieval import RetrievalClient
 from nucypher.policy.kits import RetrievalResult
 from nucypher.policy.reservoir import (
-    make_federated_staker_reservoir,
+    PrefetchStrategy,
     make_decentralized_staking_provider_reservoir,
-    PrefetchStrategy
+    make_federated_staker_reservoir,
 )
 from nucypher.utilities.concurrency import WorkerPool
 from nucypher.utilities.logging import Logger
@@ -243,12 +246,6 @@ the Pipe for PRE Application network operations
         def get_ursulas() -> Response:
             """Porter control endpoint for sampling Ursulas on behalf of Alice."""
             response = controller(method_name='get_ursulas', control_request=request)
-            return response
-
-        @porter_flask_control.route("/revoke", methods=['POST'])
-        def revoke():
-            """Porter control endpoint for off-chain revocation of a policy on behalf of Alice."""
-            response = controller(method_name='revoke', control_request=request)
             return response
 
         @porter_flask_control.route("/retrieve_cfrags", methods=['POST'])

@@ -17,8 +17,7 @@
 from typing import List, Optional
 
 from eth_typing import ChecksumAddress
-
-from nucypher_core import TreasureMap, RetrievalKit
+from nucypher_core import RetrievalKit, TreasureMap
 from nucypher_core.umbral import PublicKey
 
 from nucypher.control.interfaces import ControlInterface, attach_schema
@@ -43,14 +42,6 @@ class PorterInterface(ControlInterface):
 
         response_data = {"ursulas": ursulas_info}
         return response_data
-
-    @attach_schema(porter_schema.AliceRevoke)
-    def revoke(self) -> dict:
-        # Steps (analogous to nucypher.character.control.interfaces):
-        # 1. creation of objects / setup
-        # 2. call self.implementer.some_function() i.e. Porter learner has an associated function to call
-        # 3. create response
-        pass
 
     @attach_schema(porter_schema.BobRetrieveCFrags)
     def retrieve_cfrags(self,
