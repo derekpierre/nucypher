@@ -16,7 +16,7 @@ import time
 from abc import ABC, abstractmethod
 from collections import OrderedDict
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Tuple
+from typing import Callable, Dict, Iterable, List, Optional, Tuple
 
 import maya
 from eth_abi.codec import ABICodec
@@ -24,9 +24,8 @@ from web3 import Web3
 from web3._utils.events import get_event_data
 from web3._utils.filters import construct_event_filter_params
 from web3.contract.contract import Contract
-from web3.datastructures import AttributeDict
 from web3.exceptions import BlockNotFound
-from web3.types import BlockIdentifier
+from web3.types import BlockIdentifier, EventData
 
 from nucypher.blockchain.eth.agents import EthereumContractAgent
 from nucypher.blockchain.eth.events import EventRecord
@@ -98,7 +97,7 @@ class EventScannerState(ABC):
         """
 
     @abstractmethod
-    def process_event(self, block_when: datetime.datetime, event: AttributeDict) -> object:
+    def process_event(self, block_when: datetime.datetime, event: EventData) -> object:
         """Process incoming events.
 
         This function takes raw events from Web3, transforms them to your application internal
@@ -227,7 +226,7 @@ class EventScanner:
 
         # Cache block timestamps to reduce some RPC overhead
         # Real solution might include smarter models around block
-        def get_block_when(block_num):
+        def get_block_when(block_num) -> datetime.datetime:
             if block_num not in block_timestamps:
                 block_timestamps[block_num] = get_block_timestamp(block_num)
             return block_timestamps[block_num]
@@ -250,7 +249,9 @@ class EventScanner:
         end_block_timestamp = get_block_when(end_block)
         return end_block, end_block_timestamp, all_processed
 
-    def process_event(self, event, get_block_when):
+    def process_event(
+        self, event: EventData, get_block_when: Callable[[int], datetime.datetime]
+    ):
         """Process events and update internal state"""
         idx = event["logIndex"]  # Integer of the log index position in the block, null when its pending
 
@@ -481,7 +482,7 @@ class JSONifiedState(EventScannerState):
         if self.persistent and (time.time() - self.last_save > 60):
             self.save()
 
-    def process_event(self, block_when: datetime.datetime, event: AttributeDict) -> str:
+    def process_event(self, block_when: datetime.datetime, event: EventData) -> str:
         """Record a ERC-20 event_record in our database."""
         # Events are keyed by their transaction hash and log index
         # One transaction may contain multiple events

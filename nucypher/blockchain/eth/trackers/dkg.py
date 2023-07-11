@@ -1,10 +1,11 @@
+import datetime
 import os
 import time
 from typing import Callable, List, Optional, Tuple, Type, Union
 
 from twisted.internet import threads
 from web3.contract.contract import ContractEvent
-from web3.datastructures import AttributeDict
+from web3.types import EventData
 
 from nucypher.blockchain.eth import actors
 from nucypher.policy.conditions.utils import camel_case_to_snake
@@ -32,7 +33,9 @@ class EventActuator(EventScanner):
             chain_reorg_rescan_window=chain_reorg_rescan_window, *args, **kwargs
         )
 
-    def process_event(self, event, get_block_when):
+    def process_event(
+        self, event: EventData, get_block_when: Callable[[int], datetime.datetime]
+    ):
         for hook in self.hooks:
             try:
                 hook(event, get_block_when)
@@ -194,7 +197,9 @@ class ActiveRitualTracker:
             return False
         return True
 
-    def _filter(self, event) -> Tuple[AttributeDict, Union[None, Type[ContractEvent]]]:
+    def _filter(
+        self, event: EventData
+    ) -> Tuple[Union[None, EventData], Type[ContractEvent]]:
         """Secondary filtration of events."""
         name, args = event.event, event.args
         event_type = getattr(self.contract.events, event.event)
@@ -207,7 +212,14 @@ class ActiveRitualTracker:
             return None, event_type
         return event, event_type
 
-    def __execute_round(self, event_type, timestamp: int, ritual_id: int, defer: bool = False, **kwargs):
+    def __execute_round(
+        self,
+        event_type: Type[ContractEvent],
+        timestamp: int,
+        ritual_id: int,
+        defer: bool = False,
+        **kwargs,
+    ):
         """Execute a round of a ritual asynchronously."""
         def task():
             self.actions[event_type](timestamp=timestamp, ritual_id=ritual_id, **kwargs)
@@ -219,7 +231,9 @@ class ActiveRitualTracker:
         else:
             return task()
 
-    def _handle_ritual_event(self, event: AttributeDict, get_block_when: Callable):
+    def _handle_ritual_event(
+        self, event: EventData, get_block_when: Callable[[int], datetime.datetime]
+    ):
         # Refresh the list of rituals to make sure we have the latest data
         self.refresh()
         # Filter out events that are not for us
