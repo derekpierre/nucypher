@@ -343,10 +343,6 @@ def light_ursula(temp_dir_path, test_registry_source_manager, random_account, mo
         eth_provider=MOCK_ETH_PROVIDER_URI, network=TEMPORARY_DOMAIN
     )
 
-    mocker.patch.object(
-        Operator, "get_staking_provider_address", return_value=random_account.address
-    )
-
     ursula = Ursula(
         rest_host=LOOPBACK_ADDRESS,
         rest_port=select_test_port(),

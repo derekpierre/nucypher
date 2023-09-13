@@ -877,9 +877,9 @@ class Ursula(Teacher, Character, actors.Operator, actors.Ritualist):
                 actors.Ritualist.__init__(
                     self,
                     domain=domain,
-                    condition_provider_uris=condition_provider_uris,
                     coordinator_provider_uri=payment_method.provider,
-                    network=payment_method.network,
+                    eth_provider_uri=eth_provider_uri,
+                    condition_provider_uris=condition_provider_uris,
                     transacting_power=self.transacting_power,
                     crypto_power=self._crypto_power,
                     registry=self.registry,

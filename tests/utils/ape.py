@@ -17,6 +17,7 @@ from nucypher.blockchain.eth.agents import (
     SubscriptionManagerAgent,
     TACoApplicationAgent,
 )
+from nucypher.blockchain.eth.constants import PROXY_ADMIN, TRANSPARENT_UPGRADEABLE_PROXY
 from nucypher.blockchain.eth.registry import InMemoryContractRegistry
 from tests.constants import (
     CONDITION_NFT,
@@ -33,8 +34,11 @@ _CONTRACTS_TO_DEPLOY_ON_TESTERCHAIN = (
     T_TOKEN,
     NucypherTokenAgent.contract_name,
     MOCK_STAKING_CONTRACT_NAME,
+    PROXY_ADMIN,
     TACoApplicationAgent.contract_name,
     TACO_CHILD_APPLICATION,
+    TRANSPARENT_UPGRADEABLE_PROXY,
+    TRANSPARENT_UPGRADEABLE_PROXY,
     SubscriptionManagerAgent.contract_name,
     CoordinatorAgent.contract_name,
     GLOBAL_ALLOW_LIST,
@@ -121,7 +125,9 @@ def process_deployment_params(
 
             processed_params[param_name] = value_list
             continue
-
+        elif param_value == "EMPTY_BYTES":
+            processed_params[param_name] = b""
+            continue
         else:
             # this parameter is a literal
             processed_params[param_name] = param_value
@@ -160,6 +166,7 @@ def get_deployment_params(
 def deploy_contracts(
     nucypher_contracts: DependencyAPI,
     test_contracts: DependencyAPI,
+    oz_contracts: DependencyAPI,
     accounts: List[TestAccount],
 ):
     """Deploy contracts o via ape's API for testing."""
@@ -173,20 +180,26 @@ def deploy_contracts(
             # this contract is a dependency
             contract = getattr(nucypher_contracts, name)
         except AttributeError:
-            # this contract is local to this project
+            # this contract is an oz dependency
             try:
-                contract = getattr(project, name)
+                contract = getattr(oz_contracts, name)
             except AttributeError:
-                raise ValueError(
-                    f"Contract {name} not found in project or in dependencies."
-                )
+                # this contract is local to this project
+                try:
+                    contract = getattr(project, name)
+                except AttributeError:
+                    raise ValueError(
+                        f"Contract {name} not found in project or in dependencies."
+                    )
         deployed_contract = deployer_account.deploy(contract, *params.values())
         deployments[name] = deployed_contract
     return deployments
 
 
 def registry_from_ape_deployments(
-    nucypher_contracts: DependencyAPI, deployments: Dict[str, ContractInstance]
+    nucypher_contracts: DependencyAPI,
+    oz_contracts: DependencyAPI,
+    deployments: Dict[str, ContractInstance]
 ) -> InMemoryContractRegistry:
     """Creates a registry from ape deployments."""
 
@@ -195,6 +208,9 @@ def registry_from_ape_deployments(
     # Get the raw abi from the cached dependency manifest
     dependency_manifest = json.loads(nucypher_contracts.cached_manifest.json())
     combined_contract_data = dependency_manifest["contractTypes"]
+
+    oz_dependency_manifest = json.loads(oz_contracts.cached_manifest.json())
+    combined_contract_data.update(oz_dependency_manifest["contractTypes"])
 
     # Add the local contract ABIs to the data
     for contract_name, local_contract_data in local_contracts.items():

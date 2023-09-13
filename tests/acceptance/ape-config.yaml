@@ -40,12 +40,24 @@ deployments:
         commitment_duration:
           - 15724800  # 6 months
           - 31449600  # 12 months
+      - contract_type: ProxyAdmin
+        address: '0x1e59ce931B4CFea3fe4B875411e280e173cB7A9C'  # deployer account at index 0
+      - contract_type: TransparentUpgradeableProxy
+        address: '0x1e59ce931B4CFea3fe4B875411e280e173cB7A9C'  # deployer account at index 0
+        logic: <TACoApplication.address>
+        proxy_admin: <ProxyAdmin.address>
+        initializer: "EMPTY_BYTES"
       - contract_type: TACoChildApplication
         address: '0x1e59ce931B4CFea3fe4B875411e280e173cB7A9C'  # deployer account at index 0
         root_application: <TACoApplication.address>
+      - contract_type: TransparentUpgradeableProxy
+        address: '0x1e59ce931B4CFea3fe4B875411e280e173cB7A9C'  # deployer account at index 0
+        logic: <TACoChildApplication.address>
+        proxy_admin: <ProxyAdmin.address>
+        initializer: "EMPTY_BYTES"
       - contract_type: Coordinator
         address: '0x1e59ce931B4CFea3fe4B875411e280e173cB7A9C'  # deployer account at index 0
-        stake_info: <TACoChildApplication.address>
+        child_application: <TACoChildApplication.address>
         ritual_timeout: 3600
         max_dkg_size: 8
         admin: '0x1e59ce931B4CFea3fe4B875411e280e173cB7A9C'  # deployer account at index 0

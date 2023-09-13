@@ -285,7 +285,8 @@ class Ritualist(BaseActor):
     def __init__(
         self,
         coordinator_provider_uri: str,
-        network: str,  # this must be the network where the coordinator lives
+        eth_provider_uri: str,
+        registry: BaseContractRegistry,
         crypto_power: CryptoPower,
         transacting_power: TransactingPower,
         condition_provider_uris: Optional[Dict[int, List[str]]] = None,
@@ -294,13 +295,19 @@ class Ritualist(BaseActor):
         **kwargs,
     ):
         crypto_power.consume_power_up(transacting_power)
-        super().__init__(transacting_power=transacting_power, *args, **kwargs)
+        super().__init__(transacting_power=transacting_power, registry=registry, *args, **kwargs)
         self.log = Logger("ritualist")
 
         self.coordinator_agent = ContractAgency.get_agent(
             CoordinatorAgent,
-            registry=InMemoryContractRegistry.from_latest_publication(network=network),
+            registry=registry,
             provider_uri=coordinator_provider_uri,
+        )
+
+        self.application_agent = ContractAgency.get_agent(
+            TACoApplicationAgent,
+            provider_uri=eth_provider_uri,
+            registry=self.registry,
         )
 
         # track active onchain rituals
@@ -328,8 +335,11 @@ class Ritualist(BaseActor):
 
     def set_provider_public_key(self):
         # Here we're assuming there is one global key per node.
+        staking_provider_address = self.application_agent.get_staking_provider_from_operator(
+            self.transacting_power.account
+        )
         is_provider_key_set = self.coordinator_agent.is_provider_public_key_set(
-            self.staking_provider_address,
+            staking_provider_address
         )
         if not is_provider_key_set:
             self.coordinator_agent.set_provider_public_key(

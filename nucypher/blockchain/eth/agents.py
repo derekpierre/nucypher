@@ -44,7 +44,7 @@ from nucypher.blockchain.eth.constants import (
     NUCYPHER_TOKEN_CONTRACT_NAME,
     NULL_ADDRESS,
     SUBSCRIPTION_MANAGER_CONTRACT_NAME,
-    TACO_APPLICATION_CONTRACT_NAME,
+    TACO_APPLICATION_CONTRACT_NAME, TRANSPARENT_UPGRADEABLE_PROXY, PROXY_ADMIN,
 )
 from nucypher.blockchain.eth.decorators import contract_api
 from nucypher.blockchain.eth.interfaces import BlockchainInterfaceFactory
@@ -66,8 +66,7 @@ class EthereumContractAgent:
     """
 
     contract_name: str = NotImplemented
-    _forward_address: bool = True
-    _proxy_name: Optional[str] = None
+    _is_proxied: bool = False
     _excluded_interfaces: Tuple[str, ...]
 
     # TODO - #842: Gas Management
@@ -104,8 +103,7 @@ class EthereumContractAgent:
                 registry=registry,
                 contract_name=self.contract_name,
                 contract_version=contract_version,
-                proxy_name=self._proxy_name,
-                use_proxy_address=self._forward_address
+                is_proxied=self._is_proxied,
             )
 
         self.__contract = contract
@@ -320,7 +318,8 @@ class SubscriptionManagerAgent(EthereumContractAgent):
 class AdjudicatorAgent(EthereumContractAgent):
 
     contract_name: str = ADJUDICATOR_CONTRACT_NAME
-    _proxy_name: str = DISPATCHER_CONTRACT_NAME
+    _is_proxied = True
+    #_proxy_name: str = DISPATCHER_CONTRACT_NAME
 
     @contract_api(TRANSACTION)
     def evaluate_cfrag(self, evidence, transacting_power: TransactingPower) -> TxReceipt:
@@ -392,6 +391,7 @@ class AdjudicatorAgent(EthereumContractAgent):
 class TACoApplicationAgent(EthereumContractAgent):
 
     contract_name: str = TACO_APPLICATION_CONTRACT_NAME
+    _is_proxied = True
 
     DEFAULT_PROVIDERS_PAGINATION_SIZE_LIGHT_NODE = int(os.environ.get(NUCYPHER_ENVVAR_STAKING_PROVIDERS_PAGINATION_SIZE_LIGHT_NODE, default=30))
     DEFAULT_PROVIDERS_PAGINATION_SIZE = int(os.environ.get(NUCYPHER_ENVVAR_STAKING_PROVIDERS_PAGINATION_SIZE, default=1000))
@@ -561,7 +561,7 @@ class TACoApplicationAgent(EthereumContractAgent):
     @contract_api(TRANSACTION)
     def confirm_operator_address(self, transacting_power: TransactingPower, fire_and_forget: bool = True) -> TxReceipt:
         """Confirm the sender's account as a operator"""
-        contract_function: ContractFunction = self.contract.functions.confirmOperatorAddress()
+        contract_function: ContractFunction = self.contract.functions.confirmOperatorAddress(transacting_power.account)
         receipt = self.blockchain.send_transaction(contract_function=contract_function,
                                                    transacting_power=transacting_power,
                                                    fire_and_forget=fire_and_forget
@@ -579,7 +579,7 @@ class TACoApplicationAgent(EthereumContractAgent):
 
 class CoordinatorAgent(EthereumContractAgent):
     contract_name: str = "Coordinator"
-    _proxy_name = None
+    _is_proxied = None
 
     class G2Point(NamedTuple):
         """

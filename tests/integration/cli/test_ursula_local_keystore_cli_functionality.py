@@ -28,9 +28,7 @@ def mock_account_password_keystore(tmp_path_factory):
     return account, password, keystore
 
 
-@pytest.mark.usefixtures(
-    "test_registry_source_manager", "monkeypatch_get_staking_provider_from_operator"
-)
+@pytest.mark.usefixtures("test_registry_source_manager")
 def test_ursula_init_with_local_keystore_signer(
     click_runner, temp_dir_path, mocker, testerchain, mock_account_password_keystore
 ):

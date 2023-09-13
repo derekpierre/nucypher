@@ -84,10 +84,6 @@ def make_ursulas(
             **ursula_overrides
         )
 
-        # TODO: Confirm operator here?
-        # if commit_now:
-        #     ursula.confirm_operator_address()
-
         ursulas.append(ursula)
 
         # Store this Ursula in our global testing cache.

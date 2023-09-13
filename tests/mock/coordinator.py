@@ -1,6 +1,7 @@
 import time
 from enum import Enum
 from typing import Dict, List, NamedTuple
+from unittest.mock import Mock
 
 from eth_typing import ChecksumAddress
 from eth_utils import keccak
@@ -20,6 +21,7 @@ from tests.mock.interfaces import MockBlockchain
 
 
 class MockCoordinatorAgent(MockContractAgent):
+    _is_proxied = Mock()
 
     Participant = CoordinatorAgent.Ritual.Participant
     Ritual = CoordinatorAgent.Ritual

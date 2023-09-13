@@ -1,5 +1,3 @@
-
-
 from nucypher.blockchain.eth.agents import ContractAgency, TACoApplicationAgent
 from tests.constants import TEST_ETH_PROVIDER_URI
 

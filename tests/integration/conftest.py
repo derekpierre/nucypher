@@ -253,15 +253,6 @@ def staking_providers(testerchain, test_registry, monkeymodule):
     return testerchain.stake_providers_accounts
 
 
-@pytest.fixture(scope="module")
-def monkeypatch_get_staking_provider_from_operator(monkeymodule):
-    monkeymodule.setattr(
-        Operator,
-        "get_staking_provider_address",
-        lambda self: self.transacting_power.account,
-    )
-
-
 @pytest.fixture(scope="session", autouse=True)
 def mock_condition_blockchains(session_mocker):
     """adds testerchain's chain ID to permitted conditional chains"""

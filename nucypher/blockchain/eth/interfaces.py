@@ -24,6 +24,7 @@ from web3.providers import BaseProvider
 from web3.types import TxReceipt
 
 from nucypher.blockchain.eth.clients import POA_CHAINS, EthereumClient, InfuraClient
+from nucypher.blockchain.eth.constants import TRANSPARENT_UPGRADEABLE_PROXY, PROXY_ADMIN
 from nucypher.blockchain.eth.decorators import validate_checksum_address
 from nucypher.blockchain.eth.providers import (
     _get_auto_provider,
@@ -642,10 +643,9 @@ class BlockchainInterface:
     def get_contract_by_name(self,
                              registry: BaseContractRegistry,
                              contract_name: str,
+                             is_proxied: bool,
                              contract_version: str = None,
                              enrollment_version: Union[int, str] = None,
-                             proxy_name: str = None,
-                             use_proxy_address: bool = True
                              ) -> VersionedContract:
         """
         Instantiate a deployed contract from registry data,
@@ -661,7 +661,7 @@ class BlockchainInterface:
             raise self.InterfaceError(f"Registry is potentially corrupt - multiple {contract_name} "
                                       f"contract records with the same version {contract_version}")
 
-        if proxy_name:
+        if is_proxied:
             if contract_version:
                 # contract version was specified - need more information related to proxy
                 target_all_contract_records = registry.search(contract_name=contract_name)
@@ -670,16 +670,31 @@ class BlockchainInterface:
                 target_all_contract_records = target_contract_records
 
             # Lookup proxies; Search for a published proxy that targets this contract record
-            proxy_records = registry.search(contract_name=proxy_name)
-            results = list()
+            proxy_records = registry.search(contract_name=TRANSPARENT_UPGRADEABLE_PROXY)
+            admin_records = registry.search(contract_name=PROXY_ADMIN)
 
-            for proxy_name, proxy_version, proxy_address, proxy_abi in proxy_records:
-                proxy_contract = self.client.w3.eth.contract(abi=proxy_abi,
-                                                             address=proxy_address,
-                                                             version=proxy_version,
-                                                             ContractFactoryClass=self._CONTRACT_FACTORY)
-                # Read this dispatcher's current target address from the blockchain
-                proxy_live_target_address = proxy_contract.functions.target().call()
+            if len(admin_records) > 1:
+                # TODO is this true
+                raise RuntimeError("Multiple ProxyAdmins")
+
+            proxy_admin_record = admin_records[0]
+            admin_contract_address = proxy_admin_record[2]
+            admin_contract = self.client.w3.eth.contract(abi=proxy_admin_record[3],
+                                                         address=proxy_admin_record[2],
+                                                         version=proxy_admin_record[1],
+                                                         ContractFactoryClass=self._CONTRACT_FACTORY)
+
+            results = list()
+            for proxy_name, _, proxy_address, _ in proxy_records:
+                admin_address_for_proxy = admin_contract.functions.getProxyAdmin(proxy_address).call()
+                if admin_address_for_proxy != admin_contract_address:
+                    # TODO: is this true
+                    raise RuntimeError("Proxy contract not managed by ProxyAdmin")
+
+                # Read this proxy admin's current target address from the blockchain
+                proxy_live_target_address = admin_contract.functions.getProxyImplementation(
+                    proxy_address
+                ).call()
 
                 # either proxy is targeting latest version of contract
                 # or
@@ -691,18 +706,16 @@ class BlockchainInterface:
                             target_version = target_contract_records[0][1]
                             target_abi = target_contract_records[0][3]
 
-                        if use_proxy_address:
-                            triplet = (proxy_address, target_version, target_abi)
-                        else:
-                            triplet = (target_address, target_version, target_abi)
+                        triplet = (proxy_address, target_version, target_abi)
                     else:
                         continue
 
+                    print(f">>>> Derek found a triplet {triplet}")
                     results.append(triplet)
 
             if len(results) > 1:
                 address, _version, _abi = results[0]
-                message = "Multiple {} deployments are targeting {}".format(proxy_name, address)
+                message = "Multiple {} deployments are targeting {}".format(TRANSPARENT_UPGRADEABLE_PROXY, address)
                 raise self.InterfaceError(message.format(contract_name))
             else:
                 try:
@@ -712,7 +725,6 @@ class BlockchainInterface:
                         f"There are no Dispatcher records targeting '{contract_name}':{contract_version}")
 
         else:
-            # TODO: use_proxy_address doesnt' work in this case. Should we raise if used?
             # NOTE: 0 must be allowed as a valid version number
             if len(target_contract_records) != 1:
                 if enrollment_version is None:

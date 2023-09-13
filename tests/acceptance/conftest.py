@@ -4,22 +4,23 @@ import random
 import pytest
 from web3 import Web3
 
-from nucypher.blockchain.eth.actors import Operator, Ritualist
+from nucypher.blockchain.eth.actors import Ritualist
 from nucypher.blockchain.eth.agents import (
     ContractAgency,
     CoordinatorAgent,
     TACoApplicationAgent,
 )
+from nucypher.blockchain.eth.constants import TRANSPARENT_UPGRADEABLE_PROXY, PROXY_ADMIN
 from nucypher.blockchain.eth.interfaces import BlockchainInterfaceFactory
 from nucypher.blockchain.eth.networks import NetworksInventory
 from nucypher.blockchain.eth.signers.software import Web3Signer
-from nucypher.config.constants import TEMPORARY_DOMAIN
-from nucypher.crypto.powers import CryptoPower, TransactingPower
+from nucypher.crypto.powers import (
+    TransactingPower,
+)
 from nucypher.policy.conditions.context import USER_ADDRESS_CONTEXT
 from nucypher.policy.conditions.evm import RPCCondition
 from nucypher.policy.conditions.lingo import ConditionLingo, ReturnValueTest
 from nucypher.policy.conditions.time import TimeCondition
-from nucypher.policy.payment import SubscriptionManagerPayment
 from nucypher.utilities.logging import Logger
 from tests.constants import (
     APE_TEST_CHAIN_ID,
@@ -28,15 +29,9 @@ from tests.constants import (
     INSECURE_DEVELOPMENT_PASSWORD,
     MOCK_STAKING_CONTRACT_NAME,
     RITUAL_TOKEN,
-    TACO_CHILD_APPLICATION,
-    TEST_ETH_PROVIDER_URI,
+    TEST_ETH_PROVIDER_URI, TACO_CHILD_APPLICATION,
 )
-from tests.utils.ape import (
-    deploy_contracts as ape_deploy_contracts,
-)
-from tests.utils.ape import (
-    registry_from_ape_deployments,
-)
+from tests.utils.ape import deploy_contracts as ape_deploy_contracts, registry_from_ape_deployments
 from tests.utils.blockchain import TesterBlockchain
 from tests.utils.ursula import (
     mock_permitted_multichain_connections,
@@ -76,6 +71,14 @@ def test_contracts(project):
 
 
 @pytest.fixture(scope="session", autouse=True)
+def oz_contracts(project):
+    oz_contracts_dependency_api = project.dependencies["openzeppelin"]
+    _, _oz_contracts = list(oz_contracts_dependency_api.items())[0]
+    _oz_contracts.compile()
+    return _oz_contracts
+
+
+@pytest.fixture(scope="session", autouse=True)
 def nucypher_contracts(project):
     nucypher_contracts_dependency_api = project.dependencies["nucypher-contracts"]
     # simply use first entry - could be from github ('main') or local ('local')
@@ -85,10 +88,21 @@ def nucypher_contracts(project):
 
 
 @pytest.fixture(scope='module', autouse=True)
-def deploy_contracts(nucypher_contracts, test_contracts, accounts):
+def deploy_contracts(nucypher_contracts, test_contracts, oz_contracts, accounts):
+    
+
+
+
+
+
+
+
+
+
     deployments = ape_deploy_contracts(
         nucypher_contracts=nucypher_contracts,
         test_contracts=test_contracts,
+        oz_contracts=oz_contracts,
         accounts=accounts,
     )
     return deployments
@@ -112,8 +126,8 @@ def initiator(testerchain, alice, ritual_token, deployer_account):
 
 
 @pytest.fixture(scope='module', autouse=True)
-def test_registry(nucypher_contracts, deploy_contracts):
-    registry = registry_from_ape_deployments(nucypher_contracts, deployments=deploy_contracts)
+def test_registry(nucypher_contracts, oz_contracts, deploy_contracts):
+    registry = registry_from_ape_deployments(nucypher_contracts, oz_contracts, deployments=deploy_contracts)
     return registry
 
 
@@ -128,11 +142,44 @@ def testerchain(project, test_registry) -> TesterBlockchain:
 
 @pytest.fixture(scope='module')
 def taco_child_application(testerchain, test_registry):
-    result = test_registry.search(contract_name=TACO_CHILD_APPLICATION)[0]
-    _taco_child_application = testerchain.w3.eth.contract(
-        address=result[2], abi=result[3]
+    result = test_registry.search(contract_name=PROXY_ADMIN)[0]
+    admin_contract = testerchain.w3.eth.contract(address=result[2], abi=result[3])
+
+    proxy_records = test_registry.search(contract_name=TRANSPARENT_UPGRADEABLE_PROXY)
+    taco_child_contract = test_registry.search(contract_name=TACO_CHILD_APPLICATION)[0]
+    taco_child_contract_address = taco_child_contract[2]
+    taco_child_contract_abi = taco_child_contract[3]
+
+    for proxy_record in proxy_records:
+        implementation_address = admin_contract.functions.getProxyImplementation(proxy_record[2]).call()
+        if implementation_address == taco_child_contract_address:
+            _taco_child_application = testerchain.w3.eth.contract(
+                address=proxy_record[2], abi=taco_child_contract_abi
+            )
+            return _taco_child_application
+
+    raise RuntimeError("Child application not found")
+
+
+@pytest.fixture(scope="module")
+def taco_application_agent(testerchain, test_registry, taco_child_application, deployer_account):
+    taco_application_agent = ContractAgency.get_agent(
+        TACoApplicationAgent,
+        registry=test_registry,
+        provider_uri=TEST_ETH_PROVIDER_URI,
     )
-    return _taco_child_application
+
+    tx = taco_application_agent.contract.functions.initialize().transact(
+        {"from": deployer_account.address}
+    )
+    testerchain.wait_for_receipt(tx)
+
+    tx = taco_application_agent.contract.functions.setChildApplication(taco_child_application.address).transact(
+       {"from": deployer_account.address}
+    )
+    testerchain.wait_for_receipt(tx)
+
+    return taco_application_agent
 
 
 @pytest.fixture(scope="module")
@@ -143,16 +190,9 @@ def ritual_token(testerchain, test_registry):
 
 
 @pytest.fixture(scope="module")
-def threshold_staking(testerchain, test_registry):
+def threshold_staking(testerchain, test_registry, taco_application_agent):
     result = test_registry.search(contract_name=MOCK_STAKING_CONTRACT_NAME)[0]
     _threshold_staking = testerchain.w3.eth.contract(address=result[2], abi=result[3])
-
-    # TODO: Relocate this to pre application setup
-    taco_application_agent = ContractAgency.get_agent(
-        TACoApplicationAgent,
-        registry=test_registry,
-        provider_uri=TEST_ETH_PROVIDER_URI,
-    )
 
     tx = _threshold_staking.functions.setApplication(
         taco_application_agent.contract_address
@@ -185,14 +225,9 @@ def staking_providers(
     testerchain,
     test_registry,
     threshold_staking,
-    taco_child_application,
     coordinator_agent,
+    taco_application_agent
 ):
-    taco_application_agent = ContractAgency.get_agent(
-        TACoApplicationAgent,
-        registry=test_registry,
-        provider_uri=TEST_ETH_PROVIDER_URI,
-    )
     blockchain = taco_application_agent.blockchain
     minimum_stake = (
         taco_application_agent.contract.functions.minimumAuthorization().call()
@@ -221,41 +256,6 @@ def staking_providers(
             operator=operator_address,
             transacting_power=provider_power,
         )
-
-        operator_power = TransactingPower(
-            account=operator_address, signer=Web3Signer(testerchain.client)
-        )
-
-        operator = Operator(
-            is_me=True,
-            operator_address=operator_address,
-            domain=TEMPORARY_DOMAIN,
-            registry=test_registry,
-            transacting_power=operator_power,
-            eth_provider_uri=testerchain.eth_provider_uri,
-            signer=Web3Signer(testerchain.client),
-            crypto_power=CryptoPower(power_ups=[operator_power]),
-            payment_method=SubscriptionManagerPayment(
-                eth_provider=testerchain.eth_provider_uri,
-                network=TEMPORARY_DOMAIN,
-                registry=test_registry,
-            ),
-        )
-        operator.confirm_address()  # assume we always need a "pre-confirmed" operator for now.
-
-        # TODO clean this up, perhaps with a fixture
-        # update StakeInfo
-        tx = taco_child_application.functions.updateOperator(
-            provider_address,
-            operator_address,
-        ).transact()
-        testerchain.wait_for_receipt(tx)
-
-        tx = taco_child_application.functions.updateAmount(
-            provider_address,
-            amount,
-        ).transact()
-        testerchain.wait_for_receipt(tx)
 
         # track
         staking_providers.append(provider_address)
