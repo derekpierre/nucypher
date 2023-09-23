@@ -19,7 +19,6 @@ from nucypher.utilities.logging import Logger
 from tests.constants import (
     BONUS_TOKENS_FOR_TESTS,
     INSECURE_DEVELOPMENT_PASSWORD,
-    MIN_OPERATOR_SECONDS,
     TEST_ETH_PROVIDER_URI,
     TESTERCHAIN_CHAIN_ID,
 )
@@ -151,15 +150,19 @@ def proxy_admin(oz_dependency, deployer_account):
 @pytest.fixture(scope="module")
 def taco_application(nucypher_dependency, deployer_account, t_token, threshold_staking):
     _taco_application = deployer_account.deploy(
-        nucypher_dependency.TACoApplication,
-        t_token.address,
-        threshold_staking.address,
-        MIN_AUTHORIZATION,
-        MIN_OPERATOR_SECONDS,
-        REWARD_DURATION,
-        DEAUTHORIZATION_DURATION,
-        [COMMITMENT_DURATION_1, COMMITMENT_DURATION_2],
+        nucypher_dependency.LynxRootApplication,
     )
+
+    # _taco_application = deployer_account.deploy(
+    #     nucypher_dependency.TACoApplication,
+    #     t_token.address,
+    #     threshold_staking.address,
+    #     MIN_AUTHORIZATION,
+    #     MIN_OPERATOR_SECONDS,
+    #     REWARD_DURATION,
+    #     DEAUTHORIZATION_DURATION,
+    #     [COMMITMENT_DURATION_1, COMMITMENT_DURATION_2],
+    # )
 
     return _taco_application
 
@@ -173,28 +176,31 @@ def taco_application_proxy(
     taco_application,
     threshold_staking,
 ):
-    proxy = oz_dependency.TransparentUpgradeableProxy.deploy(
-        taco_application.address,
-        proxy_admin.address,
-        b"",
-        sender=deployer_account,
-    )
-    proxy_contract = nucypher_dependency.TACoApplication.at(proxy.address)
+    # proxy = oz_dependency.TransparentUpgradeableProxy.deploy(
+    #     taco_application.address,
+    #     proxy_admin.address,
+    #     b"",
+    #     sender=deployer_account,
+    # )
+    # proxy_contract = nucypher_dependency.TACoApplication.at(proxy.address)
 
-    threshold_staking.setApplication(proxy_contract.address, sender=deployer_account)
-    proxy_contract.initialize(sender=deployer_account)
+    threshold_staking.setApplication(taco_application.address, sender=deployer_account)
+    #proxy_contract.initialize(sender=deployer_account)
 
-    return proxy_contract
+    return taco_application
 
 
 @pytest.fixture(scope="module")
 def taco_child_application(
     nucypher_dependency, taco_application_proxy, deployer_account
 ):
+    # _taco_child_application = deployer_account.deploy(
+    #     nucypher_dependency.TACoChildApplication, taco_application_proxy.address
+    # )
     _taco_child_application = deployer_account.deploy(
-        nucypher_dependency.TACoChildApplication, taco_application_proxy.address
+        nucypher_dependency.LynxTACoChildApplication,
+        taco_application_proxy.address,
     )
-
     return _taco_child_application
 
 
@@ -207,18 +213,18 @@ def taco_child_application_proxy(
     taco_child_application,
     taco_application_proxy,
 ):
-    proxy = oz_dependency.TransparentUpgradeableProxy.deploy(
-        taco_child_application.address,
-        proxy_admin.address,
-        b"",
-        sender=deployer_account,
-    )
-    proxy_contract = nucypher_dependency.TACoChildApplication.at(proxy.address)
+    # proxy = oz_dependency.TransparentUpgradeableProxy.deploy(
+    #     taco_child_application.address,
+    #     proxy_admin.address,
+    #     b"",
+    #     sender=deployer_account,
+    # )
+    # proxy_contract = nucypher_dependency.TACoChildApplication.at(proxy.address)
     taco_application_proxy.setChildApplication(
-        proxy_contract.address, sender=deployer_account
+        taco_child_application.address, sender=deployer_account
     )
 
-    return proxy_contract
+    return taco_child_application
 
 
 @pytest.fixture(scope="module")
@@ -235,8 +241,12 @@ def coordinator(
         FEE_RATE,
     )
     _coordinator.makeInitiationPublic(sender=deployer_account)
-    taco_child_application_proxy.initialize(
-        _coordinator.address, sender=deployer_account
+    #taco_child_application_proxy.initialize(
+    #    _coordinator.address, sender=deployer_account
+    #
+    taco_child_application_proxy.setCoordinator(
+        _coordinator.address,
+        sender=deployer_account
     )
     return _coordinator
 
@@ -295,8 +305,12 @@ def deployed_contracts(
 
 
 @pytest.fixture(scope="module", autouse=True)
-def test_registry(deployed_contracts):
-    registry = registry_from_ape_deployments(deployments=deployed_contracts)
+def test_registry(deployed_contracts, taco_application, taco_child_application):
+    registry_names = {
+        taco_application.contract_type.name: "TACoApplication",
+        taco_child_application.contract_type.name: "TACoChildApplication",
+    }
+    registry = registry_from_ape_deployments(deployments=deployed_contracts, registry_names=registry_names)
     return registry
 
 
