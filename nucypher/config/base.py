@@ -16,7 +16,7 @@ from constant_sorrow.constants import (
 )
 from eth_utils.address import is_checksum_address
 
-from nucypher.blockchain.eth import domains
+from nucypher.blockchain.eth.domains import TACoDomains
 from nucypher.blockchain.eth.interfaces import BlockchainInterfaceFactory
 from nucypher.blockchain.eth.registry import (
     ContractRegistry,
@@ -307,7 +307,7 @@ class CharacterConfiguration(BaseConfiguration):
 
     CHARACTER_CLASS = NotImplemented
     MNEMONIC_KEYSTORE = False
-    DEFAULT_DOMAIN = domains.DEFAULT_DOMAIN_NAME
+    DEFAULT_DOMAIN = TACoDomains.DEFAULT_DOMAIN_NAME
     DEFAULT_NETWORK_MIDDLEWARE = RestMiddleware
     TEMP_CONFIGURATION_DIR_PREFIX = 'tmp-nucypher'
     SIGNER_ENVVAR = None
@@ -415,7 +415,7 @@ class CharacterConfiguration(BaseConfiguration):
 
         # Learner
         self.domain = domain
-        self.taco_domain = domains.from_domain_name(self.domain)
+        self.taco_domain = TACoDomains.from_domain_name(self.domain)
         self.learn_on_same_thread = learn_on_same_thread
         self.abort_on_learning_error = abort_on_learning_error
         self.start_learning_now = start_learning_now
@@ -454,7 +454,7 @@ class CharacterConfiguration(BaseConfiguration):
                 self.log.info(f"Using local registry ({self.registry}).")
 
         self.signer = Signer.from_signer_uri(
-            self.signer_uri, testnet=self.taco_domain.is_testnet()
+            self.signer_uri, testnet=self.taco_domain.is_testnet
         )
 
         #

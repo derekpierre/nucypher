@@ -5,11 +5,11 @@ from typing import List
 from ape.contracts import ContractInstance
 from eth_utils import to_checksum_address
 
-from nucypher.blockchain.eth import domains
 from nucypher.blockchain.eth.domains import (
     EthChain,
     PolygonChain,
     TACoDomain,
+    TACoDomains,
 )
 from nucypher.blockchain.eth.registry import (
     RegistryData,
@@ -33,8 +33,8 @@ def mock_registry_sources(mocker, domain_names: List[str] = None):
         supported_domains.append(test_domain)
         supported_domain_names.append(domain_name)
 
-    mocker.patch.object(domains, "SUPPORTED_DOMAINS", supported_domains)
-    mocker.patch.object(domains, "SUPPORTED_DOMAIN_NAMES", supported_domain_names)
+    mocker.patch.object(TACoDomains, "SUPPORTED_DOMAINS", supported_domains)
+    mocker.patch.object(TACoDomains, "SUPPORTED_DOMAIN_NAMES", supported_domain_names)
     mocker.patch.object(MockRegistrySource, "ALLOWED_DOMAINS", domain_names)
 
     mocker.patch.object(RegistrySourceManager, "_FALLBACK_CHAIN", (MockRegistrySource,))

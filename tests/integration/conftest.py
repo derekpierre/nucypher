@@ -18,6 +18,7 @@ from nucypher.blockchain.eth.domains import (
     EthChain,
     PolygonChain,
     TACoDomain,
+    TACoDomains,
 )
 from nucypher.blockchain.eth.interfaces import (
     BlockchainInterface,
@@ -294,8 +295,8 @@ def mock_condition_blockchains(session_mocker):
         TEMPORARY_DOMAIN, EthChain.TESTERCHAIN, PolygonChain.TESTERCHAIN
     )
 
-    session_mocker.patch(
-        "nucypher.blockchain.eth.domains.from_domain_name", return_value=test_domain
+    session_mocker.patch.object(
+        TACoDomains, "from_domain_name", return_value=test_domain
     )
 
 
