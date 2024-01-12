@@ -11,6 +11,7 @@ from nucypher.crypto.powers import CryptoPower
 from nucypher.exceptions import DevelopmentInstallationRequired
 from nucypher.policy.payment import FreeReencryptions
 from tests.constants import TESTERCHAIN_CHAIN_ID
+from tests.utils.blockchain import TestAccount
 
 
 class Vladimir(Ursula):
@@ -49,8 +50,6 @@ class Vladimir(Ursula):
 
         crypto_power = CryptoPower(power_ups=target_ursula._default_crypto_powerups)
 
-        cls.attach_transacting_key(blockchain=eth_blockchain)
-
         # Vladimir does not care about payment.
         bogus_pre_payment_method = FreeReencryptions()
         bogus_pre_payment_method.provider = Mock()
@@ -62,6 +61,8 @@ class Vladimir(Ursula):
             "mock.interfaces.MockBlockchain.client.chain_id",
             new_callable=mock.PropertyMock(return_value=eth_blockchain.client.chain_id),
         )
+
+        vlads_wallet = TestAccount.from_key(cls.fraud_key)
 
         vladimir = cls(
             is_me=True,
@@ -93,6 +94,7 @@ class Vladimir(Ursula):
         # so it should work regardless of the binary format.
 
         # Our basic replacement. We want to impersonate the target Ursula.
+        vladimir._staking_provider_address = vlads_wallet.address
         metadata_bytes = metadata_bytes.replace(bytes(metadata.payload.staking_provider_address),
                                                 vladimir.canonical_address)
 
@@ -113,28 +115,6 @@ class Vladimir(Ursula):
         vladimir._metadata = fake_metadata
 
         return vladimir
-
-    @classmethod
-    def attach_transacting_key(cls, blockchain):
-        """
-        Upload Vladimir's ETH keys to the keychain via web3.
-        """
-        try:
-            from eth_tester.exceptions import ValidationError
-        except ImportError:
-            raise DevelopmentInstallationRequired(
-                importable_name="eth_tester.exceptions.ValidationError"
-            )
-        try:
-            password = 'iamverybadass'
-            blockchain.w3.provider.ethereum_tester.add_account(cls.fraud_key, password=password)
-        except (ValidationError,):
-            # check if Vlad's key is already on the keystore...
-            if cls.fraud_address in blockchain.client.accounts:
-                return True
-            else:
-                raise
-        return True
 
 
 class Amonia(Alice):

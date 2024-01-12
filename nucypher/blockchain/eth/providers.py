@@ -18,7 +18,7 @@ def _get_IPC_provider(endpoint) -> BaseProvider:
                        request_kwargs={'timeout': BlockchainInterface.TIMEOUT})
 
 
-def _get_HTTP_provider(endpoint) -> BaseProvider:
+def _get_http_provider(endpoint) -> BaseProvider:
     from nucypher.blockchain.eth.interfaces import BlockchainInterface
 
     return HTTPProvider(
