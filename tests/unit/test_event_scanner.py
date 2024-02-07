@@ -70,18 +70,16 @@ def test_suggested_scan_start_block():
     state.get_last_scanned_block.return_value = last_scanned_block
     assert scanner.get_suggested_scan_start_block() == 1  # first block
 
-    # we've progressed less than change reorg
-    last_scanned_block = CHAIN_REORG_WINDOW - 4
+    # we've progressed
+    last_scanned_block = 6
     state.get_last_scanned_block.return_value = last_scanned_block
-    assert scanner.get_suggested_scan_start_block() == 1  # still first block
+    assert scanner.get_suggested_scan_start_block() == last_scanned_block
 
     # we've progressed further
     last_scanned_blocks = [19, 100, 242341, 151552423]
     for last_scanned_block in last_scanned_blocks:
         state.get_last_scanned_block.return_value = last_scanned_block
-        assert scanner.get_suggested_scan_start_block() == (
-            last_scanned_block - CHAIN_REORG_WINDOW
-        )
+        assert scanner.get_suggested_scan_start_block() == (last_scanned_block)
 
 
 def test_suggested_scan_end_block():
@@ -96,10 +94,12 @@ def test_suggested_scan_end_block():
         chain_reorg_rescan_window=CHAIN_REORG_WINDOW,
     )
 
-    block_nums = [1, 10, 231, 12319021]
+    block_nums = [1, 10, 100, 150, 231, 12319021]
     for block_num in block_nums:
         web3.eth.block_number = block_num
-        assert scanner.get_suggested_scan_end_block() == (block_num - 1)
+        assert scanner.get_suggested_scan_end_block() == max(
+            1, block_num - CHAIN_REORG_WINDOW
+        )
 
 
 def test_get_block_timestamp():
@@ -169,7 +169,7 @@ def test_scan_when_events_always_found(chunk_size):
     assert scanner.get_last_scanned_block() == end_block
 
     # check value for next scan
-    assert scanner.get_suggested_scan_start_block() == (end_block - CHAIN_REORG_WINDOW)
+    assert scanner.get_suggested_scan_start_block() == end_block
 
 
 @pytest.mark.parametrize("chunk_size", [2, 6, 7, 11, 15])
@@ -205,7 +205,7 @@ def test_scan_when_events_never_found(chunk_size):
     assert scanner.get_last_scanned_block() == end_block
 
     # check value for next scan
-    assert scanner.get_suggested_scan_start_block() == (end_block - CHAIN_REORG_WINDOW)
+    assert scanner.get_suggested_scan_start_block() == end_block
 
 
 def test_scan_when_events_never_found_super_large_chunk_sizes():
@@ -244,7 +244,7 @@ def test_scan_when_events_never_found_super_large_chunk_sizes():
     assert scanner.get_last_scanned_block() == end_block
 
     # check value for next scan
-    assert scanner.get_suggested_scan_start_block() == (end_block - CHAIN_REORG_WINDOW)
+    assert scanner.get_suggested_scan_start_block() == end_block
 
 
 def generate_expected_scan_calls_results(scanner, start_block, end_block):

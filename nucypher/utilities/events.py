@@ -202,22 +202,18 @@ class EventScanner:
 
         end_block = self.get_last_scanned_block()
         if end_block:
-            return max(1, end_block - self.chain_reorg_rescan_window)
+            return max(1, end_block)
         return 1
 
     def get_suggested_scan_end_block(self):
         """Get the last mined block on Ethereum chain we are following."""
 
-        # Do not scan all the way to the final block, as this
-        # block might not be mined yet
-        return self.web3.eth.block_number - 1
+        # Do not scan all the way to the final block, as blocks can be
+        # reorg'd; leave the reorg window as a buffer
+        return max(1, self.web3.eth.block_number - self.chain_reorg_rescan_window)
 
     def get_last_scanned_block(self) -> int:
         return self.state.get_last_scanned_block()
-
-    def delete_potentially_forked_block_data(self, after_block: int):
-        """Purge old data in the case of blockchain reorganisation."""
-        self.state.delete_data(after_block)
 
     def scan_chunk(self, start_block, end_block) -> Tuple[int, datetime.datetime, list]:
         """Read and process events between to block numbers.

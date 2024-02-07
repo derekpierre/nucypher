@@ -24,7 +24,7 @@ class EventActuator(EventScanner):
         self,
         hooks: List[Callable],
         clear: bool = True,
-        chain_reorg_rescan_window: int = 10,
+        chain_reorg_rescan_window: int = 20,
         *args,
         **kwargs,
     ):
@@ -425,10 +425,7 @@ class ActiveRitualTracker:
 
     def scan(self):
         """
-        Assume we might have scanned the blocks all the way to the last Ethereum block
-        that mined a few seconds before the previous scan run ended.
-        Because there might have been a minor Ethereum chain reorganisations since the last scan ended,
-        we need to discard the last few blocks from the previous scan results.
+        The scanner takes care of block reorgs by not always scanning to the latest block.
         """
         last_scanned_block = self.scanner.get_last_scanned_block()
         self._LAST_SCANNED_BLOCK_METRIC.set(last_scanned_block)
@@ -437,9 +434,6 @@ class ActiveRitualTracker:
             # first run so calculate starting block number based on dkg timeout
             suggested_start_block = self._get_first_scan_start_block_number()
         else:
-            self.scanner.delete_potentially_forked_block_data(
-                last_scanned_block - self.scanner.chain_reorg_rescan_window
-            )
             suggested_start_block = self.scanner.get_suggested_scan_start_block()
 
         end_block = self.scanner.get_suggested_scan_end_block()
