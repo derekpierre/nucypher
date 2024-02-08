@@ -1148,6 +1148,7 @@ class Teacher:
         if metadata_is_valid:
             return True
         else:
+            self.log.debug("Metadata signature invalid")
             raise self.InvalidNode("Metadata signature is invalid")
 
     def validate_metadata(
@@ -1209,6 +1210,7 @@ class Teacher:
         try:
             sprout = self.from_metadata_bytes(response_data)
         except Exception as e:
+            self.log.debug(f"Invalid Node: {e}")
             raise self.InvalidNode(str(e))
 
         verifying_keys_match = sprout.verifying_key == self.public_keys(SigningPower)
@@ -1237,6 +1239,7 @@ class Teacher:
             else:
                 message = "Wrong cryptographic material for this node - something fishy going on."
             # TODO: #355 - Optional reporting.
+            self.log.debug(f"Invalid Node: {message}")
             raise self.InvalidNode(message)
         else:
             # Success
