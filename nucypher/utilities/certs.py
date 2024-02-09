@@ -69,25 +69,26 @@ class CertificateCache:
 
 
 class SelfSignedPoolManager(PoolManager):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, certificate_cache: CertificateCache, *args, **kwargs):
+        self.certificate_cache = certificate_cache
         super().__init__(*args, **kwargs)
-
-    def set_cache(self, cache: CertificateCache):
-        self.cache = cache
 
     def connection_from_url(self, url, pool_kwargs=None):
         if not pool_kwargs:
             pool_kwargs = {}
-        ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-        ssl_context.verify_mode = ssl.CERT_REQUIRED
-        ssl_context.check_hostname = False
+        ssl_context = pool_kwargs.get("ssl_context")
+        if not ssl_context:
+            ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+            ssl_context.verify_mode = ssl.CERT_REQUIRED
+            ssl_context.check_hostname = False
+            pool_kwargs["ssl_context"] = ssl_context
+
         parsed = urlparse(url)
         host, port = parsed.hostname, parsed.port
-        cached_certificate = self.cache.get(Address(host, port))
+        cached_certificate = self.certificate_cache.get(Address(host, port))
         if cached_certificate:
             ssl_context.load_verify_locations(cadata=cached_certificate)
 
-        pool_kwargs["ssl_context"] = ssl_context
         return super().connection_from_url(url, pool_kwargs=pool_kwargs)
 
 
@@ -101,9 +102,10 @@ class SelfSignedCertificateAdapter(HTTPAdapter):
         super().__init__(*args, **kwargs)
 
     def init_poolmanager(self, *args, **kwargs) -> None:
-        """Override the default poolmanager to use the  local SSL context."""
-        self.poolmanager = SelfSignedPoolManager(*args, **kwargs)
-        self.poolmanager.set_cache(self.certificate_cache)
+        """Override the default poolmanager to use the certificate cache."""
+        self.poolmanager = SelfSignedPoolManager(
+            self.certificate_cache, *args, **kwargs
+        )
 
 
 class P2PSession(Session):
@@ -112,8 +114,8 @@ class P2PSession(Session):
 
     def __init__(self):
         super().__init__()
-        self.cache = CertificateCache()
-        self.adapter = SelfSignedCertificateAdapter(certificate_cache=self.cache)
+        self.certificate_cache = CertificateCache()
+        self.adapter = SelfSignedCertificateAdapter(self.certificate_cache)
         self.mount("https://", self.adapter)
 
     @classmethod
@@ -143,7 +145,7 @@ class P2PSession(Session):
         """
 
         address = self._resolve_address(url=request.url)  # resolves dns
-        self.__get_or_refresh_certificate(address)  # cache by resolved ip
+        self.__ensure_certificate_cached_and_uptodate(address)  # cache by resolved ip
         url = _replace_with_resolved_address(url=request.url, resolved_address=address)
         request.url = url  # replace the hostname with the resolved IP address
         try:
@@ -152,13 +154,13 @@ class P2PSession(Session):
             self.adapter.log.debug(f"Request failed due to {e}, retrying...")
             return self.__retry_send(address, request, *args, **kwargs)
 
-    def __get_or_refresh_certificate(self, address: Address) -> Certificate:
-        if self.cache.should_cache_now(address):
+    def __ensure_certificate_cached_and_uptodate(self, address: Address) -> Certificate:
+        if self.certificate_cache.should_cache_now(address):
             return self._refresh_certificate(address)
-        certificate = self.cache.get(address)
+        certificate = self.certificate_cache.get(address)
         return certificate
 
     def _refresh_certificate(self, address: Address) -> Certificate:
         certificate = _fetch_server_cert(address)
-        self.cache.set(address, certificate)
+        self.certificate_cache.set(address, certificate)
         return certificate
