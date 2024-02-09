@@ -68,27 +68,42 @@ class CertificateCache:
         )
 
 
+class SelfSignedPoolManager(PoolManager):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def set_cache(self, cache: CertificateCache):
+        self.cache = cache
+
+    def connection_from_url(self, url, pool_kwargs=None):
+        if not pool_kwargs:
+            pool_kwargs = {}
+        ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        ssl_context.verify_mode = ssl.CERT_REQUIRED
+        ssl_context.check_hostname = False
+        parsed = urlparse(url)
+        host, port = parsed.hostname, parsed.port
+        cached_certificate = self.cache.get(Address(host, port))
+        if cached_certificate:
+            ssl_context.load_verify_locations(cadata=cached_certificate)
+
+        pool_kwargs["ssl_context"] = ssl_context
+        return super().connection_from_url(url, pool_kwargs=pool_kwargs)
+
+
 class SelfSignedCertificateAdapter(HTTPAdapter):
     """An adapter that verifies self-signed certificates in memory only."""
 
     log = logging.Logger(__name__)
 
-    def __init__(self, *args, **kwargs):
-        self.ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-        self.ssl_context.verify_mode = ssl.CERT_REQUIRED
-        self.ssl_context.check_hostname = False
+    def __init__(self, certificate_cache: CertificateCache, *args, **kwargs):
+        self.certificate_cache = certificate_cache
         super().__init__(*args, **kwargs)
 
     def init_poolmanager(self, *args, **kwargs) -> None:
         """Override the default poolmanager to use the  local SSL context."""
-        self.poolmanager = PoolManager(*args, ssl_context=self.ssl_context, **kwargs)
-
-    def trust_certificate(self, certificate: Certificate) -> None:
-        """Accept the given certificate as trusted."""
-        try:
-            self.ssl_context.load_verify_locations(cadata=certificate)
-        except ssl.SSLError as e:
-            self.log.debug(f"Failed to load certificate {e}.")
+        self.poolmanager = SelfSignedPoolManager(*args, **kwargs)
+        self.poolmanager.set_cache(self.certificate_cache)
 
 
 class P2PSession(Session):
@@ -97,8 +112,8 @@ class P2PSession(Session):
 
     def __init__(self):
         super().__init__()
-        self.adapter = SelfSignedCertificateAdapter()
         self.cache = CertificateCache()
+        self.adapter = SelfSignedCertificateAdapter(certificate_cache=self.cache)
         self.mount("https://", self.adapter)
 
     @classmethod
@@ -110,8 +125,7 @@ class P2PSession(Session):
         return Address(hostname, parsed.port or cls._DEFAULT_PORT)
 
     def __retry_send(self, address, request, *args, **kwargs) -> Response:
-        certificate = self._refresh_certificate(address)
-        self.adapter.trust_certificate(certificate=certificate)
+        self._refresh_certificate(address)
         try:
             return super().send(request, *args, **kwargs)
         except RequestException as e:
@@ -129,8 +143,7 @@ class P2PSession(Session):
         """
 
         address = self._resolve_address(url=request.url)  # resolves dns
-        certificate = self.__get_or_refresh_certificate(address)  # cache by resolved ip
-        self.adapter.trust_certificate(certificate=certificate)
+        self.__get_or_refresh_certificate(address)  # cache by resolved ip
         url = _replace_with_resolved_address(url=request.url, resolved_address=address)
         request.url = url  # replace the hostname with the resolved IP address
         try:

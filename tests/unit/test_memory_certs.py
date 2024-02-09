@@ -28,8 +28,7 @@ def cache():
 
 @pytest.fixture
 def adapter(cache):
-    _adapter = SelfSignedCertificateAdapter()
-    _adapter.cert_cache = cache
+    _adapter = SelfSignedCertificateAdapter(certificate_cache=cache)
     return _adapter
 
 
@@ -68,7 +67,6 @@ def test_cache_cert(cache):
 
 
 def test_send_request(session, mocker):
-    mocker.patch.object(SelfSignedCertificateAdapter, "trust_certificate")
     mocked_refresh = mocker.patch.object(
         session, "_refresh_certificate", return_value=MOCK_CERT
     )
