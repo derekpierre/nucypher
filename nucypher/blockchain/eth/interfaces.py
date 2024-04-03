@@ -559,16 +559,20 @@ class BlockchainInterface:
         max_cost = Web3.from_wei(max_cost_wei, 'ether')
 
         if transacting_power.is_device:
-            emitter.message(f'Confirm transaction {transaction_name} on hardware wallet... '
-                            f'({max_cost} ETH @ {max_price_gwei} gwei)',
-                            color='yellow')
+            emitter.message(
+                f"Confirm transaction {transaction_name} on hardware wallet... "
+                f"({max_cost} @ {max_price_gwei} gwei)",
+                color="yellow",
+            )
         signed_raw_transaction = transacting_power.sign_transaction(transaction_dict)
 
         #
         # Broadcast
         #
-        emitter.message(f'Broadcasting {transaction_name} {tx_type} Transaction ({max_cost} ETH @ {max_price_gwei} gwei)',
-                        color='yellow')
+        emitter.message(
+            f"Broadcasting {transaction_name} {tx_type} Transaction ({max_cost} @ {max_price_gwei} gwei)",
+            color="yellow",
+        )
         try:
             txhash = self.client.send_raw_transaction(signed_raw_transaction)  # <--- BROADCAST
             emitter.message(f'TXHASH {txhash.hex()}', color='yellow')
