@@ -45,7 +45,7 @@ anim id est laborum
 
 # Security
 
-If you identify vulnerabilities with _any_ nucypher code, please email security@nucypher.com with relevant information
+If you identify any vulnerabilities with _any_ nucypher code, please email security@nucypher.com with relevant information
 to your findings.
 We will work with researchers to coordinate vulnerability disclosure between our stakers, partners, and users to ensure
 successful mitigation of vulnerabilities.
