@@ -13,7 +13,7 @@ secrets management and dynamic access control.*
 
 # TACo Access Control
 
-TACo (Threshold Access Control) are end-to-end encrypted data sharing and communication, without the requirement of
+TACo (Threshold Access Control) is end-to-end encrypted data sharing and communication, without the requirement of
 trusting a centralized authority, who might unilaterally deny service or even decrypt private user data. It is the only
 access control layer available to Web3 developers that can offer a decentralized service, through a live,
 well-collateralized and battle-tested network.  See more here: [https://docs.threshold.network/applications/threshold-access-control](https://docs.threshold.network/applications/threshold-access-control)
@@ -29,19 +29,6 @@ and accept bug reports.
 If you're interested in contributing code, please check out
 our [Contribution Guide](CONTRIBUTING.rst)
 and browse our [Open Issues](https://github.com/nucypher/nucypher/issues) for potential areas to contribute.
-
-Some additional text at the end.
-
-Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod
-tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim
-veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
-
-
-Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat
-nulla pariatur.
-
-Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit
-anim id est laborum
 
 # Security
 
