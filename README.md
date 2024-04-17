@@ -22,7 +22,7 @@ well-collateralized and battle-tested network.  See more here: [https://docs.thr
 
 NuCypher is a community-driven project and we're very open to outside contributions.
 
-All our development discussions happen in our [Discord server](https://discord.gg/7rmXa3S), where we're happy to answer
+All our development discussions happen in our [Discord server](https://discord.gg/threshold), where we're happy to answer
 technical questions, discuss feature requests,
 and accept bug reports.
 
