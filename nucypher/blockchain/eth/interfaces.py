@@ -313,7 +313,6 @@ class BlockchainInterface:
     def configure_gas_strategy(self, gas_strategy: Optional[Callable] = None) -> None:
         if gas_strategy:
             reported_gas_strategy = f"fixed/{gas_strategy.name}"
-
         else:
             reported_gas_strategy = f"web3/{self.gas_strategy}"
             gas_strategy = self.get_gas_strategy(self.gas_strategy)

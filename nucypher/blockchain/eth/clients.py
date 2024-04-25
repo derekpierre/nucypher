@@ -1,9 +1,13 @@
+import os
 import time
 from functools import cached_property
 from typing import Union
 
 from constant_sorrow.constants import UNKNOWN_DEVELOPMENT_CHAIN_ID
+from eth_account import Account
+from eth_account.messages import encode_defunct
 from eth_typing.evm import BlockNumber
+from eth_utils import to_canonical_address, to_checksum_address
 from web3 import Web3
 from web3._utils.threads import Timeout
 from web3.contract.contract import Contract
@@ -40,7 +44,10 @@ PUBLIC_CHAINS = {
     80002: "Polygon/Amoy",
 }
 
-# This list is incomplete, but it suffices for the moment - See #1857
+LOCAL_CHAINS = {1337: "GethDev", 5777: "Ganache/TestRPC"}
+
+# This list is not exhaustive,
+# but is sufficient for the current needs of the project.
 POA_CHAINS = {
     4,  # Rinkeby
     5,  # Goerli
@@ -109,12 +116,31 @@ class EthereumClient:
 
     @property
     def chain_name(self) -> str:
-        name = PUBLIC_CHAINS.get(self.chain_id, UNKNOWN_DEVELOPMENT_CHAIN_ID)
+        chain_inventory = LOCAL_CHAINS if self.is_local else PUBLIC_CHAINS
+        name = chain_inventory.get(self.chain_id, UNKNOWN_DEVELOPMENT_CHAIN_ID)
         return name
+
+    def lock_account(self, account) -> bool:
+        if self.is_local:
+            return True
+        return NotImplemented
+
+    def unlock_account(self, account, password, duration=None) -> bool:
+        if self.is_local:
+            return True
+        return NotImplemented
 
     @property
     def is_connected(self):
         return self.w3.is_connected()
+
+    @property
+    def is_local(self):
+        return self.chain_id not in PUBLIC_CHAINS
+
+    @property
+    def accounts(self):
+        return self.w3.eth.accounts
 
     def get_balance(self, account):
         return self.w3.eth.get_balance(account)
@@ -243,6 +269,9 @@ class EthereumClient:
             # TODO: Consider adding an optional param in this exception to include extra info (e.g. new block)
         return True
 
+    def sign_transaction(self, transaction_dict: dict) -> bytes:
+        raise NotImplementedError
+
     def get_transaction(self, transaction_hash) -> dict:
         return self.w3.eth.get_transaction(transaction_hash)
 
@@ -259,6 +288,14 @@ class EthereumClient:
     def send_raw_transaction(self, transaction_bytes: bytes) -> str:
         return self.w3.eth.send_raw_transaction(transaction_bytes)
 
+    def sign_message(self, account: str, message: bytes) -> str:
+        """
+        Calls the appropriate signing function for the specified account on the
+        backend. If the backend is based on eth-tester, then it uses the
+        eth-tester signing interface to do so.
+        """
+        return self.w3.eth.sign(account, data=message)
+
     def get_blocktime(self):
         highest_block = self.w3.eth.get_block('latest')
         now = highest_block['timestamp']
@@ -271,3 +308,60 @@ class EthereumClient:
         # TODO: Investigate using `web3.middleware.make_stalecheck_middleware` #2060
         # check that our local chain data is up to date
         return (time.time() - self.get_blocktime()) < self.STALECHECK_ALLOWABLE_DELAY
+
+
+class EthereumTesterClient(EthereumClient):
+    def unlock_account(self, account, password, duration: int = None) -> bool:
+        """Returns True if the testing backend keystore has control of the given address."""
+        account = to_checksum_address(account)
+        keystore_accounts = self.w3.provider.ethereum_tester.get_accounts()
+        if account in keystore_accounts:
+            return True
+        else:
+            return self.w3.provider.ethereum_tester.unlock_account(
+                account=account, password=password, unlock_seconds=duration
+            )
+
+    def lock_account(self, account) -> bool:
+        """Returns True if the testing backend keystore has control of the given address."""
+        account = to_canonical_address(account)
+        keystore_accounts = self.w3.provider.ethereum_tester.backend.get_accounts()
+        if account in keystore_accounts:
+            return True
+        else:
+            return self.w3.provider.ethereum_tester.lock_account(account=account)
+
+    def new_account(self, password: str) -> str:
+        insecure_account = self.w3.provider.ethereum_tester.add_account(
+            private_key=os.urandom(32).hex(), password=password
+        )
+        return insecure_account
+
+    def __get_signing_key(self, account: bytes):
+        """Get signing key of test account"""
+        account = to_canonical_address(account)
+        try:
+            signing_key = self.w3.provider.ethereum_tester.backend._key_lookup[
+                account
+            ]._raw_key
+        except KeyError:
+            raise self.UnknownAccount(account)
+        return signing_key
+
+    def sign_transaction(self, transaction_dict: dict) -> bytes:
+        # Sign using a local private key
+        address = to_canonical_address(transaction_dict["from"])
+        signing_key = self.__get_signing_key(account=address)
+        raw_transaction = self.w3.eth.account.sign_transaction(
+            transaction_dict, private_key=signing_key
+        ).rawTransaction
+        return raw_transaction
+
+    def sign_message(self, account: str, message: bytes) -> str:
+        """Sign, EIP-191 (Geth) Style"""
+        signing_key = self.__get_signing_key(account=account)
+        signable_message = encode_defunct(primitive=message)
+        signature_and_stuff = Account.sign_message(
+            signable_message=signable_message, private_key=signing_key
+        )
+        return signature_and_stuff["signature"]
