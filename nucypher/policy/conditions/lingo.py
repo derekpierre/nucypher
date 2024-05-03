@@ -4,7 +4,7 @@ import json
 import operator as pyoperator
 from enum import Enum
 from hashlib import md5
-from typing import Any, List, Optional, Tuple, Type, Union
+from typing import Any, Dict, List, Optional, Set, Tuple, Type, Union
 
 from hexbytes import HexBytes
 from marshmallow import (
@@ -19,6 +19,7 @@ from marshmallow import (
 )
 from marshmallow.validate import OneOf, Range
 from packaging.version import parse as parse_version
+from web3 import HTTPProvider
 
 from nucypher.policy.conditions.base import AccessControlCondition, _Serializable
 from nucypher.policy.conditions.context import (
@@ -142,6 +143,17 @@ class CompoundAccessControlCondition(AccessControlCondition):
         def make(self, data, **kwargs):
             return CompoundAccessControlCondition(**data)
 
+    class NestedCounter:
+        def __init__(self, *args, **kwargs):
+            self._counter = 0
+
+        def increment(self):
+            self._counter += 1
+
+        @property
+        def count(self):
+            return self._counter
+
     def __init__(
         self,
         operator: str,
@@ -172,11 +184,40 @@ class CompoundAccessControlCondition(AccessControlCondition):
     def __repr__(self):
         return f"Operator={self.operator} (NumOperands={len(self.operands)}), id={self.id})"
 
-    def verify(self, *args, **kwargs) -> Tuple[bool, Any]:
+    def verify(
+        self, providers: Dict[int, Set[HTTPProvider]], **context
+    ) -> Tuple[bool, Any]:
+        condition_counter = self.NestedCounter()
+        internal_context = dict(
+            context
+        )  # don't potentially modify provided context; use a copy
+        return self._verify(
+            condition_counter=condition_counter, providers=providers, **internal_context
+        )
+
+    def _verify(
+        self,
+        condition_counter: NestedCounter,
+        providers: Dict[int, Set[HTTPProvider]],
+        **context,
+    ) -> Tuple[bool, Any]:
         values = []
         overall_result = True if self.operator == self.AND_OPERATOR else False
-        for condition in self.operands:
-            current_result, current_value = condition.verify(*args, **kwargs)
+        for index, condition in enumerate(self.operands):
+            if isinstance(condition, CompoundAccessControlCondition):
+                # only call internal method from now on
+                current_result, current_value = condition._verify(
+                    condition_counter=condition_counter, providers=providers, **context
+                )
+            else:
+                condition_counter.increment()
+                current_result, current_value = condition.verify(
+                    providers=providers, **context
+                )
+                context[
+                    f":compound_condition_{condition_counter.count}_result"
+                ] = current_value
+
             values.append(current_value)
             if self.operator == self.AND_OPERATOR:
                 overall_result = overall_result and current_result
