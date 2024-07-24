@@ -70,12 +70,12 @@ def initiate_dkg(
 ):
     duration = 24 * 60 * 60
     # Approve the ritual token for the coordinator agent to spend
-    amount = fee_model.getRitualCost(len(cohort_addresses), duration)
-    ritual_token.approve(
-        fee_model.address,
-        amount,
-        sender=accounts[initiator.transacting_power.account],
-    )
+    # amount = fee_model.getRitualCost(len(cohort_addresses), duration)
+    # ritual_token.approve(
+    #     fee_model.address,
+    #     amount,
+    #     sender=accounts[initiator.transacting_power.account],
+    # )
     receipt = coordinator_agent.initiate_ritual(
         fee_model=fee_model.address,
         providers=cohort_addresses,
