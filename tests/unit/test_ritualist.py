@@ -47,9 +47,11 @@ def test_initiate_ritual(
 ):
     # any value will do
     global_allow_list = get_random_checksum_address()
+    fee_model = get_random_checksum_address()
 
     duration = 100
     receipt = agent.initiate_ritual(
+        fee_model=fee_model,
         authority=transacting_power.account,
         access_controller=global_allow_list,
         providers=cohort,
