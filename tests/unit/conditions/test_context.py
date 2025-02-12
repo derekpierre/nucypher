@@ -1,6 +1,7 @@
 import copy
 import itertools
 
+import maya
 import pytest
 
 from nucypher.policy.conditions.context import (
@@ -19,6 +20,7 @@ from nucypher.policy.conditions.exceptions import (
 from nucypher.policy.conditions.lingo import (
     ReturnValueTest,
 )
+from nucypher.policy.conditions.utils import ConditionProviderManager
 
 INVALID_CONTEXT_PARAM_NAMES = [
     ":",
@@ -57,6 +59,15 @@ VALUES_WITH_RESOLUTION = [
     ([":foo", ":foo", 5, [99, [":bar"]]], [1234, 1234, 5, [99, ["'BAR'"]]]),
 ]
 
+
+@pytest.fixture()
+def condition_provider_manager(mocker, testerchain):
+    # condition provider manager
+    providers = mocker.Mock(spec=ConditionProviderManager)
+    w3 = mocker.Mock()
+    w3.eth.get_block.return_value = {"timestamp": maya.now().epoch}
+    providers.web3_endpoints.return_value = [w3]
+    return providers
 
 def test_is_context_variable():
     for variable in VALID_CONTEXT_PARAM_NAMES:
@@ -171,7 +182,11 @@ def test_resolve_context_variable_within_dictionary(value, expected_resolution):
     ],
 )
 def test_user_address_context_missing_required_entries(
-    expected_entry, context_variable_name, valid_user_address_fixture, request
+    condition_provider_manager,
+    expected_entry,
+    context_variable_name,
+    valid_user_address_fixture,
+    request,
 ):
     valid_user_address_auth_message = request.getfixturevalue(
         valid_user_address_fixture
@@ -179,7 +194,7 @@ def test_user_address_context_missing_required_entries(
     context = {context_variable_name: valid_user_address_auth_message}
     del context[context_variable_name][expected_entry]
     with pytest.raises(InvalidContextVariableData):
-        get_context_value(context_variable_name, **context)
+        get_context_value(context_variable_name, condition_provider_manager, **context)
 
 
 @pytest.mark.parametrize(
@@ -191,7 +206,10 @@ def test_user_address_context_missing_required_entries(
     ],
 )
 def test_user_address_context_invalid_typed_data(
-    context_variable_name, valid_user_address_fixture, request
+    condition_provider_manager,
+    context_variable_name,
+    valid_user_address_fixture,
+    request,
 ):
     valid_user_address_auth_message = request.getfixturevalue(
         valid_user_address_fixture
@@ -201,8 +219,9 @@ def test_user_address_context_invalid_typed_data(
     context[context_variable_name]["typedData"] = dict(
         randomSaying="Comparison is the thief of joy."  # -– Theodore Roosevelt
     )
+    # condition provider manager
     with pytest.raises(InvalidContextVariableData):
-        get_context_value(context_variable_name, **context)
+        get_context_value(context_variable_name, condition_provider_manager, **context)
 
 
 @pytest.mark.parametrize(
@@ -213,7 +232,10 @@ def test_user_address_context_invalid_typed_data(
     ],
 )
 def test_user_address_context_variable_with_incompatible_auth_message(
-    context_variable_name, valid_user_address_fixture, request
+    condition_provider_manager,
+    context_variable_name,
+    valid_user_address_fixture,
+    request,
 ):
     valid_user_address_auth_message = request.getfixturevalue(
         valid_user_address_fixture
@@ -221,7 +243,7 @@ def test_user_address_context_variable_with_incompatible_auth_message(
     # scheme in message is unexpected for context variable name
     context = {context_variable_name: valid_user_address_auth_message}
     with pytest.raises(InvalidContextVariableData, match="UnexpectedScheme"):
-        get_context_value(context_variable_name, **context)
+        get_context_value(context_variable_name, condition_provider_manager, **context)
 
 
 @pytest.mark.parametrize(
@@ -235,6 +257,7 @@ def test_user_address_context_variable_with_incompatible_auth_message(
 def test_user_address_context_variable_verification(
     context_variable_name,
     valid_user_address_fixture,
+    condition_provider_manager,
     get_random_checksum_address,
     request,
 ):
@@ -248,12 +271,15 @@ def test_user_address_context_variable_verification(
     # call underlying directive directly (appease codecov)
     address = _resolve_user_address(
         user_address_context_variable=context_variable_name,
+        providers=condition_provider_manager,
         **valid_user_address_context,
     )
     assert address == valid_user_address_context[context_variable_name]["address"]
 
     # valid user address context
-    address = get_context_value(context_variable_name, **valid_user_address_context)
+    address = get_context_value(
+        context_variable_name, condition_provider_manager, **valid_user_address_context
+    )
     assert address == valid_user_address_context[context_variable_name]["address"]
 
     # invalid user address context - signature does not match address
@@ -263,7 +289,11 @@ def test_user_address_context_variable_verification(
         "address"
     ] = get_random_checksum_address()
     with pytest.raises(ContextVariableVerificationFailed):
-        get_context_value(context_variable_name, **mismatch_with_address_context)
+        get_context_value(
+            context_variable_name,
+            condition_provider_manager,
+            **mismatch_with_address_context,
+        )
 
     # invalid user address context - signature does not match address
     # internals are mutable - deepcopy
@@ -274,7 +304,11 @@ def test_user_address_context_variable_verification(
     )
     mismatch_with_address_context[context_variable_name]["signature"] = signature
     with pytest.raises(ContextVariableVerificationFailed):
-        get_context_value(context_variable_name, **mismatch_with_address_context)
+        get_context_value(
+            context_variable_name,
+            condition_provider_manager,
+            **mismatch_with_address_context,
+        )
 
     # invalid signature
     # internals are mutable - deepcopy
@@ -283,4 +317,8 @@ def test_user_address_context_variable_verification(
         "signature"
     ] = "0xdeadbeef"  # invalid signature
     with pytest.raises(InvalidConditionContext):
-        get_context_value(context_variable_name, **invalid_signature_context)
+        get_context_value(
+            context_variable_name,
+            condition_provider_manager,
+            **invalid_signature_context,
+        )

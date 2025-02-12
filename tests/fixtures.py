@@ -654,7 +654,7 @@ def rpc_condition():
 
 
 @pytest.fixture(scope="function")
-def valid_eip712_auth_message():
+def valid_eip712_auth_message(testerchain):
     signer = Account.create()
     account = signer.address
 
@@ -677,12 +677,12 @@ def valid_eip712_auth_message():
         "domain": {
             "name": "tDec",
             "version": "1",
-            "chainId": 80001,
+            "chainId": TESTERCHAIN_CHAIN_ID,
             "salt": "0x3e6365d35fd4e53cbc00b080b0742b88f8b735352ea54c0534ed6a2e44a83ff0",
         },
         "message": {
             "address": f"{account}",
-            "blockNumber": 28117088,
+            "blockNumber": testerchain.get_block_number(),
             "blockHash": "0x104dfae58be4a9b15d59ce447a565302d5658914f1093f10290cd846fbe258b7",
             "signatureText": f"I'm the owner of address {account} as of block number 28117088",
         },
@@ -710,7 +710,7 @@ def valid_eip4361_auth_message():
         "uri": "https://login.xyz",
         "version": "1",
         "nonce": "bTyXgcQxn2htgkjJn",
-        "chain_id": 1,
+        "chain_id": TESTERCHAIN_CHAIN_ID,
         "issued_at": f"{maya.now().iso8601()}",
     }
     siwe_message = SiweMessage(**siwe_message_data).prepare_message()

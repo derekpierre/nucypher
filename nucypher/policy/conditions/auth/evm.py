@@ -54,6 +54,9 @@ class EvmAuth:
 
 
 class EIP712Auth(EvmAuth):
+    FRESHNESS_IN_HOURS = 2
+    LOG = Logger("EIP712Auth")
+
     @classmethod
     def authenticate(
         cls,
@@ -62,19 +65,32 @@ class EIP712Auth(EvmAuth):
         expected_address: str,
         providers: Optional[ConditionProviderManager] = None,
     ):
+        if not providers:
+            # should never happen
+            raise cls.AuthenticationFailed(
+                "EIP712 verification failed; no endpoints provided"
+            )
+
         try:
+            # double check timestamp freshness
+            block_number = data["message"]["blockNumber"]
+            chain_id = data["domain"]["chainId"]
+            cls._validate_freshness(block_number, chain_id, providers)
+
             # convert hex data for byte fields - bytes are expected by underlying library
             # 1. salt
             salt = data["domain"]["salt"]
             data["domain"]["salt"] = HexBytes(salt)
             # 2. blockHash
-            blockHash = data["message"]["blockHash"]
-            data["message"]["blockHash"] = HexBytes(blockHash)
+            block_hash = data["message"]["blockHash"]
+            data["message"]["blockHash"] = HexBytes(block_hash)
 
             signable_message = encode_typed_data(full_message=data)
             address_for_signature = Account.recover_message(
                 signable_message=signable_message, signature=signature
             )
+        except (cls.InvalidData, cls.AuthenticationFailed) as e:
+            raise e
         except Exception as e:
             # data could not be processed
             raise cls.InvalidData(
@@ -85,6 +101,39 @@ class EIP712Auth(EvmAuth):
             # verification failed - addresses don't match
             raise cls.AuthenticationFailed(
                 f"EIP712 verification failed; signature not valid for expected address, {expected_address}"
+            )
+
+    @classmethod
+    def _validate_freshness(cls, block_number, chain_id, providers):
+        web3_endpoints = providers.web3_endpoints(chain_id=chain_id)
+        last_error = None
+        issued_at = None
+        for web3_instance in web3_endpoints:
+            try:
+                # Interact with the EIP1271 contract
+                block_data = web3_instance.eth.get_block(block_number)
+                block_timestamp = block_data["timestamp"]
+                issued_at = maya.MayaDT(epoch=block_timestamp)
+                break
+            except Exception as e:
+                last_error = f"EIP712 blockNumber validation failed: {e}"
+                cls.LOG.warn(f"{last_error}; attempting next provider")
+        else:
+            # If all providers fail
+            if last_error:
+                raise cls.AuthenticationFailed(
+                    f"EIP712 verification failed; {last_error}"
+                )
+
+        now = maya.now()
+        if issued_at > now:
+            raise cls.InvalidData(
+                f"EIP712 message was issued at a datetime in the future: {issued_at.iso8601()}"
+            )
+        if now > issued_at.add(hours=cls.FRESHNESS_IN_HOURS):
+            raise cls.StaleMessage(
+                f"EIP712 message is more than {cls.FRESHNESS_IN_HOURS} "
+                f"hours old (issued at {issued_at.iso8601()})"
             )
 
 

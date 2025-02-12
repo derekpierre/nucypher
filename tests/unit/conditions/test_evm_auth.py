@@ -34,24 +34,41 @@ def test_auth_scheme():
         _ = EvmAuth.from_scheme(scheme="rando")
 
 
-def test_authenticate_eip712(valid_eip712_auth_message, get_random_checksum_address):
+def test_authenticate_eip712(
+    mocker, valid_eip712_auth_message, get_random_checksum_address, testerchain
+):
     data = valid_eip712_auth_message["typedData"]
     signature = valid_eip712_auth_message["signature"]
     address = valid_eip712_auth_message["address"]
+
+    # condition provider manager
+    providers = mocker.Mock(spec=ConditionProviderManager)
+    w3 = mocker.Mock()
+    w3.eth.get_block.return_value = {"timestamp": maya.now().epoch}
+    providers.web3_endpoints.return_value = [w3]
+
+    # everything valid
+    EIP712Auth.authenticate(data, signature, address, providers)
 
     # invalid data
     invalid_data = dict(data)  # make a copy
     del invalid_data["domain"]
     with pytest.raises(EvmAuth.InvalidData):
         EIP712Auth.authenticate(
-            data=invalid_data, signature=signature, expected_address=address
+            data=invalid_data,
+            signature=signature,
+            expected_address=address,
+            providers=providers,
         )
 
     invalid_data = dict(data)  # make a copy
     del invalid_data["message"]
     with pytest.raises(EvmAuth.InvalidData):
         EIP712Auth.authenticate(
-            data=invalid_data, signature=signature, expected_address=address
+            data=invalid_data,
+            signature=signature,
+            expected_address=address,
+            providers=providers,
         )
 
     # signature not for expected address
@@ -61,14 +78,20 @@ def test_authenticate_eip712(valid_eip712_auth_message, get_random_checksum_addr
     )
     with pytest.raises(EvmAuth.AuthenticationFailed):
         EIP712Auth.authenticate(
-            data=data, signature=incorrect_signature, expected_address=address
+            data=data,
+            signature=incorrect_signature,
+            expected_address=address,
+            providers=providers,
         )
 
     # invalid signature
     invalid_signature = "0xdeadbeef"
     with pytest.raises(EvmAuth.InvalidData):
         EIP712Auth.authenticate(
-            data=data, signature=invalid_signature, expected_address=address
+            data=data,
+            signature=invalid_signature,
+            expected_address=address,
+            providers=providers,
         )
 
     # mismatch with expected address
@@ -79,10 +102,33 @@ def test_authenticate_eip712(valid_eip712_auth_message, get_random_checksum_addr
             data=data,
             signature=signature,
             expected_address=get_random_checksum_address(),
+            providers=providers,
         )
 
-    # everything valid
-    EIP712Auth.authenticate(data, signature, address)
+    # expired signature
+    w3.eth.get_block.return_value = {"timestamp": maya.now().subtract(hours=3).epoch}
+    with pytest.raises(
+        EvmAuth.StaleMessage, match="EIP712 message is more than 2 hours old"
+    ):
+        EIP712Auth.authenticate(
+            data=data,
+            signature=signature,
+            expected_address=get_random_checksum_address(),
+            providers=providers,
+        )
+
+    # timestamp of signature in the future
+    w3.eth.get_block.return_value = {"timestamp": maya.now().add(hours=1).epoch}
+    with pytest.raises(
+        EvmAuth.InvalidData,
+        match="EIP712 message was issued at a datetime in the future",
+    ):
+        EIP712Auth.authenticate(
+            data=data,
+            signature=signature,
+            expected_address=get_random_checksum_address(),
+            providers=providers,
+        )
 
 
 def test_authenticate_eip4361(get_random_checksum_address):
