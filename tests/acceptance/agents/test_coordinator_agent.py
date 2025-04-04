@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 import pytest
 import pytest_twisted
 from eth_utils import keccak
@@ -20,8 +22,20 @@ def agent(coordinator_agent) -> CoordinatorAgent:
 @pytest.fixture(scope="module")
 def cohort(staking_providers):
     # "ursulas" fixture is needed to set provider public key
-    deployer, cohort_provider_1, cohort_provider_2, *everybody_else = staking_providers
-    cohort_providers = [cohort_provider_1, cohort_provider_2]
+    (
+        deployer,
+        cohort_provider_1,
+        cohort_provider_2,
+        cohort_provider_3,
+        cohort_provider_4,
+        *everybody_else,
+    ) = staking_providers
+    cohort_providers = [
+        cohort_provider_1,
+        cohort_provider_2,
+        cohort_provider_3,
+        cohort_provider_4,
+    ]
     cohort_providers.sort()  # providers must be sorted
     return cohort_providers
 
@@ -110,23 +124,43 @@ def test_initiate_ritual(
 
 @pytest_twisted.inlineCallbacks
 def test_post_transcript(
-    agent, transacting_powers, testerchain, clock, mock_async_hooks
+    agent, transacting_powers, testerchain, clock, mock_async_hooks, mocker
 ):
     ritual_id = agent.number_of_rituals() - 1
     dkg_size = len(transacting_powers)
     threshold = threshold_from_shares(dkg_size)
 
+    post_transcript_function = getattr(agent.contract.functions, "postTranscript")
+    original_publish_transcript_function = getattr(
+        agent.contract.functions, "publishTranscript"
+    )
+
     txs = []
     transcripts = []
-    for transacting_power in transacting_powers:
+    for i, transacting_power in enumerate(transacting_powers):
         transcript = generate_fake_ritual_transcript(dkg_size, threshold)
         transcripts.append(transcript)
-        async_tx = agent.post_transcript(
-            ritual_id=ritual_id,
-            transcript=transcript,
-            transacting_power=transacting_power,
-            async_tx_hooks=mock_async_hooks,
-        )
+
+        def determine_transcript_function(ritualId, transcript):
+            # either postTranscript or publishTranscript should work
+            if (i % 2) == 0:
+                return post_transcript_function(ritualId, transcript)
+            else:
+                return original_publish_transcript_function(
+                    ritualId=ritualId, transcript=transcript
+                )
+
+        with patch.object(
+            agent.contract.functions,
+            "publishTranscript",
+            side_effect=determine_transcript_function,
+        ):
+            async_tx = agent.post_transcript(
+                ritual_id=ritual_id,
+                transcript=transcript,
+                transacting_power=transacting_power,
+                async_tx_hooks=mock_async_hooks,
+            )
         txs.append(async_tx)
 
     testerchain.tx_machine.start()
