@@ -6,6 +6,10 @@ on:
       - main
       - v*.*.*
       - epic-*
+  # allows for manual triggering of the workflow, if needed, so that codecov
+  # reports can be submitted directly from the main branch for proper
+  # PR coverage reporting
+  workflow_dispatch:
 
 concurrency:
   group: ci-tests-${{ github.ref }}-pytest
