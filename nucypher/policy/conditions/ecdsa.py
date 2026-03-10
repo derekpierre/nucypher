@@ -22,6 +22,7 @@ from nucypher.policy.conditions.context import (
 from nucypher.policy.conditions.exceptions import (
     InvalidCondition,
 )
+from nucypher.policy.conditions.lingo import ConditionType
 from nucypher.utilities.logging import Logger
 
 SUPPORTED_ECDSA_CONDITION_CURVES = {c.name: c for c in curves}
@@ -153,10 +154,12 @@ class ECDSACondition(Condition):
     - curve: The elliptic curve to use for verification (required)
     """
 
-    CONDITION_TYPE = "ecdsa"  # Add this to ConditionType enum
+    CONDITION_TYPE = ConditionType.ECDSA.value
 
     class Schema(Condition.Schema, ECDSAVerificationCall.Schema):
-        condition_type = fields.Str(validate=validate.Equal("ecdsa"), required=True)
+        condition_type = fields.Str(
+            validate=validate.Equal(ConditionType.ECDSA.value), required=True
+        )
 
         @post_load
         def make(self, data, **kwargs):
