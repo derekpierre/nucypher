@@ -233,6 +233,32 @@ class SigningObjectAbiAttributeCondition(_BaseSigningObjectAttributeCondition):
 
 
 #
+# SelectCase represents:
+# {
+#     test: str
+#     condition: Condition
+# }
+#
+class SelectCaseDict(TypedDict):
+    test: ReturnValueTestDict
+    condition: "ConditionDict"
+
+
+#
+# SelectCondition represents:
+# {
+#     "value": str
+#     "cases": List[SelectCase]
+#     "defaultCondition": Condition (Optional)
+# }
+#
+class SelectConditionDict(_Condition):
+    value = str
+    cases = List[SelectCaseDict]
+    defaultCondition: NotRequired["ConditionDict"]
+
+
+#
 # ConditionDict is a dictionary of:
 # - TimeCondition
 # - RPCCondition
@@ -248,6 +274,7 @@ class SigningObjectAbiAttributeCondition(_BaseSigningObjectAttributeCondition):
 # - SigningObjectAttributeCondition
 # - SigningObjectAbiAttributeCondition
 # - ContextVariableConditionDict
+# - SelectCondition
 ConditionDict = Union[
     TimeConditionDict,
     RPCConditionDict,
@@ -263,6 +290,7 @@ ConditionDict = Union[
     SigningObjectAttributeCondition,
     SigningObjectAbiAttributeCondition,
     ContextVariableConditionDict,
+    SelectConditionDict,
 ]
 
 
