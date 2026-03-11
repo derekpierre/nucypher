@@ -227,6 +227,35 @@ def lingo_with_all_condition_types(get_random_checksum_address):
             "value": 23,
         },
     }
+    select_condition_default = {
+        "conditionType": ConditionType.SELECT.value,
+        "value": ":selectVar",
+        "cases": [
+            {
+                "test": {"comparator": "==", "value": 0},
+                "condition": time_condition,
+            },
+            {
+                "test": {"comparator": "==", "value": 1},
+                "condition": contract_condition,
+            },
+        ],
+        "defaultCondition": rpc_condition,
+    }
+    select_condition_no_default = {
+        "conditionType": ConditionType.SELECT.value,
+        "value": ":selectVar",
+        "cases": [
+            {
+                "test": {"comparator": "==", "value": 0},
+                "condition": time_condition,
+            },
+            {
+                "test": {"comparator": "==", "value": 1},
+                "condition": contract_condition,
+            },
+        ],
+    }
     return {
         "version": ConditionLingo.VERSION,
         "condition": {
@@ -236,7 +265,7 @@ def lingo_with_all_condition_types(get_random_checksum_address):
                 contract_condition,
                 if_then_else_condition,
                 sequential_condition,
-                rpc_condition,
+                select_condition_default,
                 {
                     "conditionType": ConditionType.COMPOUND.value,
                     "operator": "at-least",
@@ -244,6 +273,7 @@ def lingo_with_all_condition_types(get_random_checksum_address):
                         signing_object_attribute_condition,
                         signing_object_abi_attribute_condition,
                         context_var_condition,
+                        select_condition_no_default,
                     ],
                     "threshold": 1,
                 },
