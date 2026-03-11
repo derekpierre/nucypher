@@ -87,14 +87,17 @@ class AnyLargeIntegerField(fields.Int):
         return super()._deserialize(value, attr, data, **kwargs)
 
 
-class _ConditionField(fields.Dict):
+class ConditionField(fields.Dict):
     """Serializes/Deserializes Conditions to/from dictionaries"""
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
     def _serialize(self, value, attr, obj, **kwargs):
-        return value.to_dict()
+        if isinstance(value, Condition):
+            return value.to_dict()
+
+        return super()._serialize(value, attr, obj, **kwargs)
 
     def _deserialize(self, value, attr, data, **kwargs):
         lingo_version = self.context.get("lingo_version")
@@ -204,7 +207,7 @@ class CompoundCondition(MultiCondition):
             validate=validate.Equal(ConditionType.COMPOUND.value), required=True
         )
         operator = fields.Str(required=True)
-        operands = fields.List(_ConditionField, required=True)
+        operands = fields.List(ConditionField, required=True)
         threshold = fields.Int(required=False)
 
         # maintain field declaration ordering
@@ -578,7 +581,7 @@ class VariableOperation(_Serializable):
 class ConditionVariable(_Serializable):
     class Schema(CamelCaseSchema):
         var_name = fields.Str(required=True)
-        condition = _ConditionField(required=True)
+        condition = ConditionField(required=True)
         operations = fields.List(
             fields.Nested(VariableOperation.Schema()),
             validate=[
@@ -823,8 +826,8 @@ class IfThenElseCondition(MultiCondition):
         condition_type = fields.Str(
             validate=validate.Equal(ConditionType.IF_THEN_ELSE.value), required=True
         )
-        if_condition = _ConditionField(required=True)
-        then_condition = _ConditionField(required=True)
+        if_condition = ConditionField(required=True)
+        then_condition = ConditionField(required=True)
         else_condition = _ElseConditionField(required=True)
 
         # maintain field declaration ordering
@@ -1145,7 +1148,7 @@ class ConditionLingo(_Serializable):
 
     class Schema(Schema):
         version = fields.Str(required=True)
-        condition = _ConditionField(required=True)
+        condition = ConditionField(required=True)
 
         # maintain field declaration ordering
         class Meta:
