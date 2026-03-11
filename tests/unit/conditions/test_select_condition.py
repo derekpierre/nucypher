@@ -5,7 +5,6 @@ import pytest
 from nucypher.policy.conditions.base import Condition
 from nucypher.policy.conditions.exceptions import (
     InvalidCondition,
-    InvalidConditionLingo,
 )
 from nucypher.policy.conditions.lingo import ConditionType, ReturnValueTest
 from nucypher.policy.conditions.select import SelectCase, SelectCondition
@@ -79,7 +78,7 @@ def test_invalid_sequential_condition(rpc_condition, time_condition):
         )
 
     # invalid default condition
-    with pytest.raises(InvalidConditionLingo, match="Cannot resolve condition lingo"):
+    with pytest.raises(InvalidCondition, match="Cannot resolve condition lingo"):
         _ = SelectCondition(
             condition_type=ConditionType.SELECT.value,
             value=":someVar",

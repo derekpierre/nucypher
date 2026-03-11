@@ -77,9 +77,6 @@ class AnyLargeIntegerField(fields.Int):
     to be provided from `taco-web`. BigInts will be used for integer values > MAX_SAFE_INTEGER.
     """
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
     def _deserialize(self, value, attr, data, **kwargs):
         if isinstance(value, str):
             value = check_and_convert_big_int_string_to_int(value)
@@ -90,21 +87,21 @@ class AnyLargeIntegerField(fields.Int):
 class ConditionField(fields.Dict):
     """Serializes/Deserializes Conditions to/from dictionaries"""
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
     def _serialize(self, value, attr, obj, **kwargs):
         if isinstance(value, Condition):
-            return value.to_dict()
+            value = value.to_dict()
 
         return super()._serialize(value, attr, obj, **kwargs)
 
     def _deserialize(self, value, attr, data, **kwargs):
         lingo_version = self.context.get("lingo_version")
-        condition_data = value
-        condition_class = ConditionLingo.resolve_condition_class(
-            condition=condition_data, version=lingo_version
-        )
+        condition_data = super()._deserialize(value, attr, data, **kwargs)
+        try:
+            condition_class = ConditionLingo.resolve_condition_class(
+                condition=condition_data, version=lingo_version
+            )
+        except InvalidConditionLingo as e:
+            raise ValidationError(str(e)) from e
         instance = condition_class.from_dict(condition_data)
         return instance
 
