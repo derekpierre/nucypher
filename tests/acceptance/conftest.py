@@ -36,7 +36,7 @@ NU_TOTAL_SUPPLY = Web3.to_wei(
 )  # TODO NU(1_000_000_000, 'NU').to_units()
 
 # TACo Application
-MIN_AUTHORIZATION = Web3.to_wei(40_000, "ether")
+MIN_AUTHORIZATION = Web3.to_wei(150_000, "ether")
 
 REWARD_DURATION = 7 * ONE_DAY  # one week in seconds
 DEAUTHORIZATION_DURATION = 60 * ONE_DAY  # 60 days in seconds
