@@ -142,11 +142,6 @@ def taco_application(
         t_token.address,
         MIN_AUTHORIZATION,
         MIN_OPERATOR_SECONDS,
-        REWARD_DURATION,
-        DEAUTHORIZATION_DURATION,
-        PENALTY_DEFAULT,
-        PENALTY_DURATION,
-        PENALTY_INCREMENT,
     )
 
     proxy = deployer_account.deploy(
